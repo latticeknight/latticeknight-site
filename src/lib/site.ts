@@ -85,6 +85,8 @@ export type SiteDictionary = {
   };
   home: {
     metaTitle: string;
+    metaDescription: string;
+    socialRole: string;
     regionLabel: string;
     kicker: string;
     hero: [string, string, string];

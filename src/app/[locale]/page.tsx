@@ -3,6 +3,11 @@ import { notFound } from "next/navigation";
 
 import { HomePage } from "@/components/pages/home-page";
 import { getDictionary } from "@/content/get-dictionary";
+import {
+  alternateOpenGraphLocale,
+  openGraphLocale,
+  SITE_NAME,
+} from "@/lib/metadata";
 import { isLocale } from "@/lib/site";
 
 export async function generateMetadata({
@@ -14,14 +19,28 @@ export async function generateMetadata({
   if (!isLocale(locale)) return {};
   const dictionary = await getDictionary(locale);
   return {
-    title: dictionary.home.metaTitle,
-    description: dictionary.home.supporting,
+    title: { absolute: dictionary.home.metaTitle },
+    description: dictionary.home.metaDescription,
     alternates: {
       canonical: `/${locale}`,
       languages: {
         "en-GB": "/en",
         "pt-PT": "/pt",
       },
+    },
+    openGraph: {
+      type: "website",
+      siteName: SITE_NAME,
+      url: `/${locale}`,
+      title: dictionary.home.metaTitle,
+      description: dictionary.home.metaDescription,
+      locale: openGraphLocale(locale),
+      alternateLocale: [alternateOpenGraphLocale(locale)],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: dictionary.home.metaTitle,
+      description: dictionary.home.metaDescription,
     },
   };
 }

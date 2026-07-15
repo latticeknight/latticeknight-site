@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { SiteShell } from "@/components/site-shell";
 import { getDictionary } from "@/content/get-dictionary";
+import { SITE_NAME, SITE_URL } from "@/lib/metadata";
 import { isLocale, locales } from "@/lib/site";
 import "../globals.css";
 
@@ -21,21 +22,19 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://eduardoneto.com"),
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "Eduardo Neto · latticeknight",
+    default: SITE_NAME,
     template: "%s · Eduardo Neto",
   },
   description:
     "Systems, products and practical methods for reliable software engineering with AI agents.",
   openGraph: {
     type: "website",
-    siteName: "Eduardo Neto · latticeknight",
-    images: [{ url: "/assets/lattice-texture.png", width: 1536, height: 1024 }],
+    siteName: SITE_NAME,
   },
   twitter: {
     card: "summary_large_image",
-    images: ["/assets/lattice-texture.png"],
   },
 };
 
