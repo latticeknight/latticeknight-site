@@ -47,7 +47,10 @@ export const en: SiteDictionary = {
     skipIntro: "Skip intro",
   },
   home: {
-    metaTitle: "The Lattice",
+    metaTitle: "Eduardo Neto | Agentic Software Engineering",
+    metaDescription:
+      "Senior software engineer designing reliable agentic workflows, automation systems and real products with Codex, Claude and deterministic controls.",
+    socialRole: "Agentic Software Engineering",
     regionLabel: "Current work",
     kicker: "THE LATTICE",
     hero: [

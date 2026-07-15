@@ -47,7 +47,10 @@ export const pt: SiteDictionary = {
     skipIntro: "Saltar introdução",
   },
   home: {
-    metaTitle: "A Lattice",
+    metaTitle: "Eduardo Neto | Engenharia de Software com Agentes de IA",
+    metaDescription:
+      "Engenheiro de software sénior a desenhar fluxos fiáveis com agentes, sistemas de automação e produtos reais com Codex, Claude e controlos determinísticos.",
+    socialRole: "Engenharia de Software com Agentes de IA",
     regionLabel: "Trabalho actual",
     kicker: "A LATTICE",
     hero: [

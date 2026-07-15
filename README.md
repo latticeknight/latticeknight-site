@@ -27,6 +27,7 @@ The visual direction began as a Claude Design study and remains in `design_study
 
 The production application is a modular Next.js implementation rather than a deployment of the exported prototype.
 Shared page components, typed content dictionaries, static locale routes, and a persistent application shell make the site straightforward to extend without duplicating each language or page.
+Per-locale metadata and dynamically generated OpenGraph share cards give every route a branded lattice preview when links are shared, in English UK or Portuguese Portugal.
 
 The interface includes an ambient canvas lattice, route-aware navigation, visit history, an interactive navigation lattice, interactive role guidance, and a conceptual workflow designer.
 These features support the central idea of the site: products, practices, experiments, and writing are parts of one connected engineering system.
@@ -70,6 +71,8 @@ No environment variables or external data services are required.
 ## Structure
 
 - `src/app/[locale]` contains the statically generated bilingual routes.
+- `src/app/[locale]/opengraph-image.tsx` generates the per-locale OpenGraph share card, reused across every page route.
+- `src/lib/metadata.ts` centralizes the site name, title suffix, canonical URL, and OpenGraph locale helpers.
 - `src/components/pages` contains one modular page implementation per region.
 - `src/content` contains the English UK and Portuguese Portugal dictionaries.
 - `src/components/site-shell.tsx` owns persistent navigation, language switching, visit history, and the interactive lattice.
