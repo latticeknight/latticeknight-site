@@ -71,6 +71,8 @@ No environment variables or external data services are required.
 ## Structure
 
 - `src/app/[locale]` contains the statically generated bilingual routes.
+- `src/app/[locale]/opengraph-image.tsx` generates the per-locale OpenGraph share card, reused across every page route.
+- `src/lib/metadata.ts` centralizes the site name, title suffix, canonical URL, and OpenGraph locale helpers.
 - `src/components/pages` contains one modular page implementation per region.
 - `src/content` contains the English UK and Portuguese Portugal dictionaries.
 - `src/components/site-shell.tsx` owns persistent navigation, language switching, visit history, and the interactive lattice.
