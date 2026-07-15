@@ -1,0 +1,22 @@
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+:root{
+  --font-display:'Archivo',system-ui,sans-serif;   /* everything except labels */
+  --font-mono:'IBM Plex Mono',monospace;           /* kickers, labels, footnotes */
+  /* scale */
+  --text-hero:clamp(30px,4.4vw,52px);   /* home statement, w600, lh 1.18, ls -0.018em */
+  --text-h1:clamp(28px,3.6vw,42px);     /* page titles, w600, ls -0.015em */
+  --text-h2:27px;                       /* system names, w600 */
+  --text-h3:19px;                       /* card titles, w600 */
+  --text-body-lg:16px;                  /* page intros, lh 1.7 */
+  --text-body:15px;                     /* section body, lh 1.7 */
+  --text-body-sm:13.5px;                /* facet body, lh 1.65 */
+  --text-caption:13px;                  /* dense card body, lh 1.6 */
+  --text-label:10px;                    /* mono labels, uppercase */
+  --text-footnote:11px;                 /* mono footnotes */
+  /* mono tracking (always uppercase except the wordmark) */
+  --track-kicker:.3em;
+  --track-wordmark:.22em;   /* 'latticeknight', lowercase */
+  --track-label:.2em;
+  --track-chip:.14em;
+  --track-inline:.06em;
+}

@@ -1,0 +1,41 @@
+<!-- @startingPoint section="Website" subtitle="Home — The Lattice (static)" viewport="1280x800" -->
+<!-- @dsCard group="Website" viewport="1280x800" subtitle="Home screen — hero, active systems, featured routes" name="Home" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css"><style>
+body{margin:0;background:var(--bg-1) url('../../assets/lattice-texture.png') center/cover no-repeat fixed;color:var(--text-1);font-family:var(--font-display)}
+body::before{content:'';position:fixed;inset:0;background:rgba(8,10,14,.78)}
+a{color:var(--link);text-decoration:none}a:hover{color:var(--link-hover)}
+.mono{font-family:var(--font-mono);text-transform:uppercase}
+</style></head><body>
+<header style="position:fixed;top:0;left:0;right:0;z-index:40;display:flex;align-items:center;gap:20px;padding:0 36px;height:var(--header-h);background:linear-gradient(rgba(8,10,14,.92),rgba(8,10,14,.72) 70%,rgba(8,10,14,0));backdrop-filter:blur(6px)">
+  <a href="#" style="display:flex;align-items:baseline;gap:9px;color:var(--text-1)"><span style="font-weight:600;font-size:14px">Eduardo Neto</span><span class="mono" style="font-size:10px;letter-spacing:var(--track-wordmark);color:var(--cyan);text-transform:lowercase">latticeknight</span></a>
+  <nav style="display:flex;gap:2px;margin-left:auto;overflow-x:auto">
+    <a href="index.html" style="flex:none;font-size:12.5px;padding:7px 11px;border-radius:var(--radius-sm);color:var(--text-1);background:rgba(142,196,214,.1)">Home</a>
+    <a href="systems.html" style="flex:none;font-size:12.5px;padding:7px 11px;color:#8a867d">Systems</a><a href="sdlc.html" style="flex:none;font-size:12.5px;padding:7px 11px;color:#8a867d">Agentic SDLC</a><a href="workflows.html" style="flex:none;font-size:12.5px;padding:7px 11px;color:#8a867d">Workflows</a><a href="automation.html" style="flex:none;font-size:12.5px;padding:7px 11px;color:#8a867d">Automation</a><a href="tooling.html" style="flex:none;font-size:12.5px;padding:7px 11px;color:#8a867d">AI Tooling</a><a href="lab.html" style="flex:none;font-size:12.5px;padding:7px 11px;color:#8a867d">Lab</a><a href="notes.html" style="flex:none;font-size:12.5px;padding:7px 11px;color:#8a867d">Field Notes</a><a href="about.html" style="flex:none;font-size:12.5px;padding:7px 11px;color:#8a867d">About</a><a href="contact.html" style="flex:none;font-size:12.5px;padding:7px 11px;color:#8a867d">Contact</a>
+  </nav>
+  <button class="mono" style="background:none;border:1px solid var(--border-3);color:var(--text-3);font-size:10px;letter-spacing:.16em;padding:7px 12px;border-radius:var(--radius-sm);cursor:pointer">MAP</button>
+</header>
+<main style="position:relative;max-width:var(--page-max);margin:0 auto;padding:150px var(--page-pad-x) 90px">
+  <div class="mono" style="font-size:11px;letter-spacing:var(--track-kicker);color:var(--cyan);margin-bottom:26px">THE LATTICE</div>
+  <h1 style="font-size:var(--text-hero);line-height:1.18;font-weight:600;letter-spacing:-0.018em;margin:0;max-width:820px">Software engineering is changing.<br>The difficult part is no longer generating code.<br><span style="color:var(--cyan)">It is designing the system around the agents.</span></h1>
+  <p style="font-size:16.5px;line-height:1.7;color:var(--text-3);max-width:620px;margin:30px 0 0">Exploring how Codex, Claude and automation combine into reliable software-development workflows, and applying those methods to real products.</p>
+  <div style="display:flex;gap:12px;margin-top:38px;flex-wrap:wrap">
+    <a href="systems.html" style="padding:12px 22px;border:1px solid var(--border-cyan);border-radius:var(--radius-sm);color:var(--cyan);font-size:13.5px">Explore the systems</a>
+    <a href="workflows.html" style="padding:12px 22px;border:1px solid var(--border-3);border-radius:var(--radius-sm);color:var(--text-2);font-size:13.5px">See the workflows</a>
+    <a href="notes.html" style="padding:12px 22px;border:1px solid var(--border-3);border-radius:var(--radius-sm);color:var(--text-2);font-size:13.5px">Read the field notes</a>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--gap-cards);margin-top:100px">
+    <div style="background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--radius-lg);padding:26px 26px 24px;backdrop-filter:var(--blur-panel)">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:16px"><span style="width:7px;height:7px;border-radius:50%;background:var(--cyan);animation:lkBreathe 4s ease-in-out infinite"></span><span class="mono" style="font-size:10px;letter-spacing:.24em;color:var(--cyan)">ACTIVE · LIVE</span></div>
+      <div style="font-size:19px;font-weight:600;margin-bottom:8px">FoundMyPro</div>
+      <p style="font-size:14px;line-height:1.65;color:var(--text-3);margin:0">A UK local-services discovery platform. Growth, search authority and affiliate revenue first — subscriptions later, if ever.</p>
+      <a href="systems.html" style="display:inline-block;margin-top:16px;font-size:12.5px">Enter the cluster →</a>
+    </div>
+    <div style="background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--radius-lg);padding:26px 26px 24px;backdrop-filter:var(--blur-panel)">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:16px"><span style="width:7px;height:7px;border-radius:50%;background:var(--amber);animation:lkBreathe 5.4s ease-in-out infinite"></span><span class="mono" style="font-size:10px;letter-spacing:.24em;color:var(--amber)">ACTIVE · PRE-LAUNCH</span></div>
+      <div style="font-size:19px;font-weight:600;margin-bottom:8px">Sentinel for Sentry</div>
+      <p style="font-size:14px;line-height:1.65;color:var(--text-3);margin:0">A mobile companion for Sentry: focused alerts and informed triage away from the desk. Deliberately unlaunched while liability protections mature.</p>
+      <a href="systems.html" style="display:inline-block;margin-top:16px;font-size:12.5px">Enter the cluster →</a>
+    </div>
+  </div>
+</main>
+</body></html>

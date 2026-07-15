@@ -1,0 +1,271 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+
+import { LatticeCanvas } from "@/components/lattice-canvas";
+import { MapGraph } from "@/components/map-graph";
+import { SiteIntro } from "@/components/site-intro";
+import { hrefFor, pageSlugs, slugFromPathname, type Locale, type PageSlug, type SiteDictionary } from "@/lib/site";
+
+function LanguageSwitch({ locale, current, label }: { locale: Locale; current: PageSlug; label: string }) {
+  return (
+    <div aria-label={label} className="language-switch" role="group">
+      <Link aria-current={locale === "en" ? "true" : undefined} href={hrefFor("en", current)}>EN</Link>
+      <span aria-hidden="true">/</span>
+      <Link aria-current={locale === "pt" ? "true" : undefined} href={hrefFor("pt", current)}>PT</Link>
+    </div>
+  );
+}
+
+export function SiteShell({
+  children,
+  locale,
+  dictionary,
+}: {
+  children: React.ReactNode;
+  locale: Locale;
+  dictionary: SiteDictionary;
+}) {
+  const pathname = usePathname();
+  const current = slugFromPathname(pathname);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
+  const [routePending, setRoutePending] = useState(false);
+  const [visited, setVisited] = useState<PageSlug[]>(["home"]);
+  const mapDialogRef = useRef<HTMLDialogElement>(null);
+  const pendingPathRef = useRef<string | null>(null);
+  const pendingStartedAtRef = useRef(0);
+  const common = dictionary.common;
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!routePending || pendingPathRef.current !== pathname) return;
+    const minimumVisibleTime = 360;
+    const elapsed = performance.now() - pendingStartedAtRef.current;
+    const timer = window.setTimeout(() => {
+      setRoutePending(false);
+      pendingPathRef.current = null;
+    }, Math.max(0, minimumVisibleTime - elapsed));
+    return () => window.clearTimeout(timer);
+  }, [pathname, routePending]);
+
+  useEffect(() => {
+    if (!routePending) return;
+    const timer = window.setTimeout(() => {
+      setRoutePending(false);
+      pendingPathRef.current = null;
+    }, 8000);
+    return () => window.clearTimeout(timer);
+  }, [routePending]);
+
+  useEffect(() => {
+    let stored: PageSlug[] = [];
+    try {
+      const saved = window.sessionStorage.getItem("lk-visited");
+      stored = saved
+        ? (JSON.parse(saved) as string[]).filter((value): value is PageSlug => pageSlugs.includes(value as PageSlug))
+        : [];
+    } catch {
+      window.sessionStorage.removeItem("lk-visited");
+    }
+    const timer = window.setTimeout(() => {
+      setVisited((previous) => Array.from(new Set([...previous, ...stored, current])));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [current]);
+
+  useEffect(() => {
+    window.sessionStorage.setItem("lk-visited", JSON.stringify(visited));
+  }, [visited]);
+
+  useEffect(() => {
+    const openMap = () => setMapOpen(true);
+    window.addEventListener("lattice:open-map", openMap);
+    return () => window.removeEventListener("lattice:open-map", openMap);
+  }, []);
+
+  useEffect(() => {
+    if (!menuOpen && !mapOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        setMapOpen(false);
+      }
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [mapOpen, menuOpen]);
+
+  useEffect(() => {
+    if (mapOpen && mapDialogRef.current && !mapDialogRef.current.open) {
+      mapDialogRef.current.showModal();
+    }
+  }, [mapOpen]);
+
+  function closeOverlays() {
+    setMenuOpen(false);
+    setMapOpen(false);
+  }
+
+  function handleNavigationIntent(event: ReactMouseEvent<HTMLDivElement>) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const anchor = target.closest("a[href]");
+    if (!(anchor instanceof HTMLAnchorElement) || anchor.hasAttribute("download")) return;
+    if (anchor.target && anchor.target !== "_self") return;
+
+    const destination = new URL(anchor.href, window.location.href);
+    if (destination.origin !== window.location.origin) return;
+    if (destination.pathname === window.location.pathname && destination.search === window.location.search) return;
+
+    pendingPathRef.current = destination.pathname;
+    pendingStartedAtRef.current = performance.now();
+    setRoutePending(true);
+  }
+
+  return (
+    <div className="site-shell" onClickCapture={handleNavigationIntent}>
+      <a className="skip-link" href="#main-content">{common.skipContent}</a>
+      <div
+        aria-hidden="true"
+        className={routePending ? "route-progress route-progress--active" : "route-progress"}
+      >
+        <span />
+      </div>
+      <span aria-live="polite" className="sr-only" role="status">
+        {routePending ? common.loading : ""}
+      </span>
+      <LatticeCanvas active={current} visited={visited} />
+      {current === "home" ? <SiteIntro copy={common} /> : null}
+
+      <header className="site-header">
+        <Link className="brand" href={hrefFor(locale, "home")} onClick={closeOverlays}>
+          <span>Eduardo Neto</span>
+          <span>latticeknight</span>
+        </Link>
+        <nav aria-label={common.primaryNavigation} className="desktop-nav">
+          {pageSlugs.map((slug) => (
+            <Link aria-current={current === slug ? "page" : undefined} href={hrefFor(locale, slug)} key={slug}>
+              {common.nav[slug]}
+            </Link>
+          ))}
+        </nav>
+        <LanguageSwitch current={current} label={common.language} locale={locale} />
+        <button
+          aria-controls="lattice-dialog"
+          aria-expanded={mapOpen}
+          aria-haspopup="dialog"
+          className="header-control"
+          onClick={() => { setMapOpen(true); setMenuOpen(false); }}
+          type="button"
+        >
+          {common.map}
+        </button>
+        <button
+          aria-controls="mobile-navigation"
+          aria-expanded={menuOpen}
+          className="header-control menu-control"
+          onClick={() => { setMenuOpen((value) => !value); setMapOpen(false); }}
+          type="button"
+        >
+          {menuOpen ? common.close : common.menu}
+        </button>
+      </header>
+
+      <noscript>
+        <nav aria-label={common.primaryNavigation} className="no-script-nav">
+          {pageSlugs.map((slug) => (
+            <a href={hrefFor(locale, slug)} key={slug}>{common.nav[slug]}</a>
+          ))}
+          <a href={hrefFor(locale === "en" ? "pt" : "en", current)}>
+            {locale === "en" ? "PT" : "EN"}
+          </a>
+        </nav>
+      </noscript>
+
+      {menuOpen ? (
+        <nav aria-label={common.mobileNavigation} className="mobile-menu" id="mobile-navigation">
+          <div>
+            {pageSlugs.map((slug) => {
+              const isCurrent = current === slug;
+              const hasVisited = visited.includes(slug);
+              return (
+                <Link
+                  aria-current={isCurrent ? "page" : undefined}
+                  href={hrefFor(locale, slug)}
+                  key={slug}
+                  onClick={closeOverlays}
+                >
+                  <span className={`menu-node${isCurrent ? " menu-node--current" : hasVisited ? " menu-node--visited" : ""}`} />
+                  <span>{common.nav[slug]}</span>
+                  <small>{isCurrent ? common.current : hasVisited ? common.visited : ""}</small>
+                </Link>
+              );
+            })}
+            <p>{common.menuHint}</p>
+          </div>
+        </nav>
+      ) : null}
+
+      {mapOpen ? (
+        <dialog
+          aria-label={common.map}
+          className="map-overlay"
+          id="lattice-dialog"
+          onCancel={(event) => {
+            event.preventDefault();
+            setMapOpen(false);
+          }}
+          onClose={() => setMapOpen(false)}
+          onMouseDown={(event) => {
+          if (event.currentTarget === event.target) setMapOpen(false);
+          }}
+          ref={mapDialogRef}
+        >
+          <div className="map-diagram">
+            <button className="map-close" onClick={() => setMapOpen(false)} type="button" aria-label={common.close}>×</button>
+            <MapGraph
+              current={current}
+              hint={common.mapHint}
+              labels={common.tags}
+              locale={locale}
+              mapLabel={common.map}
+              onNavigate={closeOverlays}
+              visited={visited}
+            />
+          </div>
+        </dialog>
+      ) : null}
+
+      <main aria-hidden={menuOpen || undefined} className="page-transition" id="main-content" inert={menuOpen || undefined}>{children}</main>
+      <footer aria-hidden={menuOpen || undefined} className="site-footer" inert={menuOpen || undefined}>
+        <span>EDUARDO NETO · LATTICEKNIGHT</span>
+        <span>
+          <a href="https://github.com/latticeknight" target="_blank" rel="noreferrer">GITHUB</a>
+          <a href="https://www.linkedin.com/in/eduardo-neto-b71bb36b/" target="_blank" rel="noreferrer">LINKEDIN</a>
+        </span>
+        <span>{common.footerSystem} · {visited.length} {common.footerExplored}</span>
+      </footer>
+    </div>
+  );
+}

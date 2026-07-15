@@ -1,0 +1,70 @@
+import type { Metadata } from "next";
+import { Archivo, IBM_Plex_Mono } from "next/font/google";
+import { notFound } from "next/navigation";
+
+import { SiteShell } from "@/components/site-shell";
+import { getDictionary } from "@/content/get-dictionary";
+import { isLocale, locales } from "@/lib/site";
+import "../globals.css";
+
+const archivo = Archivo({
+  subsets: ["latin"],
+  variable: "--font-display",
+  display: "swap",
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  weight: ["400", "500"],
+  display: "swap",
+});
+
+export const metadata: Metadata = {
+  metadataBase: new URL("https://eduardoneto.com"),
+  title: {
+    default: "Eduardo Neto · latticeknight",
+    template: "%s · Eduardo Neto",
+  },
+  description:
+    "Systems, products and practical methods for reliable software engineering with AI agents.",
+  openGraph: {
+    type: "website",
+    siteName: "Eduardo Neto · latticeknight",
+    images: [{ url: "/assets/lattice-texture.png", width: 1536, height: 1024 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    images: ["/assets/lattice-texture.png"],
+  },
+};
+
+export function generateStaticParams() {
+  return locales.map((locale) => ({ locale }));
+}
+
+export default async function LocaleLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  if (!isLocale(locale)) notFound();
+  const dictionary = await getDictionary(locale);
+
+  return (
+    <html
+      className={`${archivo.variable} ${ibmPlexMono.variable}`}
+      data-scroll-behavior="smooth"
+      lang={locale === "en" ? "en-GB" : "pt-PT"}
+    >
+      <body>
+        <SiteShell dictionary={dictionary} locale={locale}>
+          {children}
+        </SiteShell>
+      </body>
+    </html>
+  );
+}

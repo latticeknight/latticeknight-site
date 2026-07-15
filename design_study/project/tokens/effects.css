@@ -1,0 +1,14 @@
+:root{
+  --blur-panel:blur(8px);
+  --blur-overlay:blur(10px);
+  --ease-travel:cubic-bezier(.6,.05,.25,1);   /* page/intro slides */
+  --ease-flip:cubic-bezier(.4,.1,.2,1);       /* card flips */
+  --dur-micro:.2s;      /* hovers */
+  --dur-page:.45s;      /* content resolve */
+  --dur-flip:.55s;
+  --dur-travel:.95s;    /* intro slide, cluster travel */
+}
+@keyframes lkFadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes lkFade{from{opacity:0}to{opacity:1}}
+@keyframes lkBreathe{0%,100%{opacity:.55}50%{opacity:1}}
+::selection{background:var(--selection)}

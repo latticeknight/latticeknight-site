@@ -1,0 +1,31 @@
+:root{
+  /* base */
+  --bg-0:#050608;            /* intro / deepest */
+  --bg-1:#080a0e;            /* page background */
+  --surface-1:rgba(15,18,24,.78);   /* primary panel (with blur) */
+  --surface-2:rgba(8,10,14,.4);     /* nested facet card */
+  --surface-3:rgba(15,18,24,.6);    /* light panel, no blur needed */
+  --text-1:#e9e5dc;          /* warm white — headings, primary */
+  --text-2:#b8b4ab;          /* body on panels */
+  --text-3:#a39f95;          /* secondary body */
+  --text-4:#7d7a72;          /* tertiary, de-emphasised */
+  --text-5:#5d5a53;          /* faint mono footnotes */
+  --cyan:#8ec4d6;            /* primary accent */
+  --cyan-bright:#b7dde9;     /* active / hover accent */
+  --amber:#d8a35f;           /* secondary accent — caution, human, in-dev */
+  /* borders */
+  --border-1:rgba(233,229,220,.08);
+  --border-2:rgba(233,229,220,.12);
+  --border-3:rgba(233,229,220,.18);
+  --border-cyan:rgba(142,196,214,.35);
+  --border-cyan-strong:rgba(142,196,214,.55);
+  --border-amber:rgba(216,163,95,.16);
+  /* semantic */
+  --link:var(--cyan);
+  --link-hover:var(--cyan-bright);
+  --status-live:var(--cyan);
+  --status-dev:var(--amber);
+  --status-experimental:var(--text-4);
+  --status-planned:transparent; /* outline dot: 1px solid var(--text-4) */
+  --selection:rgba(142,196,214,.28);
+}

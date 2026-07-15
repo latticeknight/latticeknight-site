@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;padding:0;background:#080a0e;color:#e9e5dc;font-family:'Archivo',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#8ec4d6;text-decoration:none}a:hover{color:#b7dde9}
+::selection{background:rgba(142,196,214,.28)}
+@keyframes lkFadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes lkFade{from{opacity:0}to{opacity:1}}
+@keyframes lkBreathe{0%,100%{opacity:.55}50%{opacity:1}}
+@media (prefers-reduced-motion: reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</helmet>
+<div style="min-height:100vh;position:relative">
+<canvas ref="{{ canvasRef }}" style="position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none"></canvas>
+
+<sc-if value="{{ showIntro }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="Intro" style="position:fixed;inset:0;z-index:60;background:#050608;display:flex;align-items:center;justify-content:center;overflow:hidden;transition:transform .95s cubic-bezier(.6,.05,.25,1);transform:translateY({{ introY }})">
+  <video ref="{{ videoRef }}" src="uploads/hero_video.mp4" autoplay muted playsinline loop style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.55"></video>
+  <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 55%, rgba(5,6,8,.1) 0%, rgba(5,6,8,.88) 78%)"></div>
+  <div style="position:relative;text-align:center;display:flex;flex-direction:column;align-items:center;gap:22px">
+    <div style="animation:lkFadeUp 1.4s ease .9s both">
+      <div style="font-size:clamp(30px,4.6vw,54px);font-weight:600;letter-spacing:-0.015em">Eduardo Neto</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;letter-spacing:.34em;color:#8ec4d6;margin-top:12px;text-transform:lowercase">latticeknight</div>
+    </div>
+    <div style="animation:lkFade 1.2s ease 2.6s both;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.22em;color:#a39f95;line-height:2.1">ENGINEERING WITH AGENTS.<br>BUILDING SYSTEMS THAT WORK.</div>
+  </div>
+  <button onClick="{{ skipIntro }}" style="position:absolute;left:50%;bottom:34px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:9px;background:none;border:none;color:#c9c5bc;cursor:pointer;padding:14px 22px;animation:lkFade 1s ease 1.6s both" style-hover="color:#e9e5dc">
+    <span style="font-family:'IBM Plex Mono',monospace;font-size:16px;line-height:1;animation:lkBreathe 2.4s ease-in-out infinite">↑</span>
+    <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.26em;border:1px solid rgba(233,229,220,.3);border-radius:3px;padding:11px 20px">ENTER THE LATTICE</span>
+  </button>
+</div>
+</sc-if>
+
+<header style="position:fixed;top:0;left:0;right:0;z-index:40;display:flex;align-items:center;gap:20px;padding:0 clamp(16px,3vw,36px);height:58px;background:linear-gradient(rgba(8,10,14,.92),rgba(8,10,14,.72) 70%,rgba(8,10,14,0));backdrop-filter:blur(6px)">
+  <a href="#" onClick="{{ goHome }}" style="display:flex;align-items:baseline;gap:9px;color:#e9e5dc;flex:none">
+    <span style="font-weight:600;font-size:14px;letter-spacing:.01em">Eduardo Neto</span>
+    <span style="display:{{ brandTagDisplay }};font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.22em;color:#8ec4d6">latticeknight</span>
+  </a>
+  <nav style="display:{{ deskNavDisplay }};gap:2px;margin-left:auto;overflow-x:auto;scrollbar-width:none">
+    <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="10">
+      <a href="#" onClick="{{ n.go }}" style="flex:none;font-size:12.5px;letter-spacing:.02em;padding:7px 11px;border-radius:3px;color:{{ n.color }};background:{{ n.bg }};transition:color .2s" style-hover="color:#e9e5dc">{{ n.label }}</a>
+    </sc-for>
+  </nav>
+  <button onClick="{{ toggleMap }}" title="Lattice map" style="flex:none;background:none;border:1px solid rgba(233,229,220,.18);color:#a39f95;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.16em;padding:7px 12px;border-radius:3px;cursor:pointer;min-height:34px" style-hover="border-color:rgba(142,196,214,.5);color:#8ec4d6">MAP</button>
+  <button onClick="{{ toggleMenu }}" title="Menu" style="flex:none;display:{{ menuBtnDisplay }};align-items:center;gap:8px;background:none;border:1px solid rgba(142,196,214,.35);color:#8ec4d6;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.16em;padding:7px 12px;border-radius:3px;cursor:pointer;min-height:34px">{{ menuLabel }}</button>
+</header>
+
+<sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="Mobile menu" style="position:fixed;inset:0;z-index:45;background:rgba(5,6,8,.96);backdrop-filter:blur(10px);padding:76px 20px 24px;overflow-y:auto;animation:lkFade .25s ease">
+  <div style="display:flex;flex-direction:column;gap:8px;max-width:440px;margin:0 auto">
+    <sc-for list="{{ menuItems }}" as="mi" hint-placeholder-count="10">
+      <a href="#" onClick="{{ mi.go }}" style="display:flex;align-items:center;gap:14px;border:1px solid {{ mi.border }};border-radius:5px;padding:15px 18px;min-height:52px;box-sizing:border-box;background:rgba(15,18,24,.7);color:{{ mi.color }}">
+        <span style="width:9px;height:9px;border-radius:50%;background:{{ mi.dot }};box-shadow:{{ mi.glow }};flex:none;display:block"></span>
+        <span style="flex:1;font-size:16px;font-weight:500">{{ mi.label }}</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.2em;color:#5d5a53;flex:none">{{ mi.state }}</span>
+      </a>
+    </sc-for>
+    <div style="text-align:center;font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.2em;color:#5d5a53;margin-top:14px">ONE SYSTEM · VISITED REGIONS STAY LIT</div>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ mapOpen }}" hint-placeholder-val="{{ false }}">
+<div style="position:fixed;inset:0;z-index:50;background:rgba(5,6,8,.9);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;animation:lkFade .3s ease" onClick="{{ toggleMap }}">
+  <div style="position:relative;width:min(760px,92vw);height:min(520px,80vh)">
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible">
+      <sc-for list="{{ mapEdges }}" as="e" hint-placeholder-count="14">
+        <line x1="{{ e.x1 }}" y1="{{ e.y1 }}" x2="{{ e.x2 }}" y2="{{ e.y2 }}" stroke="{{ e.stroke }}" stroke-width="{{ e.w }}" vector-effect="non-scaling-stroke"></line>
+      </sc-for>
+    </svg>
+    <sc-for list="{{ mapNodes }}" as="m" hint-placeholder-count="10">
+      <a href="#" onClick="{{ m.go }}" style="position:absolute;left:{{ m.x }};top:{{ m.y }};transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:8px;color:{{ m.color }}" style-hover="color:#e9e5dc">
+        <span style="width:{{ m.size }};height:{{ m.size }};border-radius:50%;background:{{ m.dot }};box-shadow:{{ m.glow }};display:block"></span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.18em;white-space:nowrap">{{ m.tag }}</span>
+      </a>
+    </sc-for>
+    <div style="position:absolute;bottom:-46px;left:0;right:0;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.18em;color:#5d5a53">YOU ARE AT THE BRIGHT NODE · VISITED REGIONS STAY LIT</div>
+  </div>
+</div>
+</sc-if>
+
+<main style="position:relative;z-index:10;opacity:{{ pageOpacity }};transform:translateY({{ pageShift }});transition:opacity .45s ease,transform .45s ease">
+
+<sc-if value="{{ pHome }}" hint-placeholder-val="{{ true }}">
+<div data-screen-label="Home — The Lattice" style="max-width:1060px;margin:0 auto;padding:clamp(120px,18vh,180px) clamp(20px,4vw,48px) 110px">
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.3em;color:#8ec4d6;margin-bottom:26px">THE LATTICE</div>
+  <h1 style="font-size:clamp(30px,4.4vw,52px);line-height:1.18;font-weight:600;letter-spacing:-0.018em;margin:0;max-width:820px;text-wrap:pretty">Software engineering is changing.<br>The difficult part is no longer generating code.<br><span style="color:#8ec4d6">It is designing the system around the agents.</span></h1>
+  <p style="font-size:16.5px;line-height:1.7;color:#a39f95;max-width:620px;margin:30px 0 0">Exploring how Codex, Claude and automation combine into reliable software-development workflows, and applying those methods to real products.</p>
+  <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:38px">
+    <a href="#" onClick="{{ goSystems }}" style="padding:12px 22px;border:1px solid rgba(142,196,214,.45);border-radius:3px;color:#8ec4d6;font-size:13.5px;letter-spacing:.03em" style-hover="background:rgba(142,196,214,.1)">Explore the systems</a>
+    <a href="#" onClick="{{ goWorkflows }}" style="padding:12px 22px;border:1px solid rgba(233,229,220,.18);border-radius:3px;color:#c9c5bc;font-size:13.5px;letter-spacing:.03em" style-hover="border-color:rgba(233,229,220,.4)">See the workflows</a>
+    <a href="#" onClick="{{ goNotes }}" style="padding:12px 22px;border:1px solid rgba(233,229,220,.18);border-radius:3px;color:#c9c5bc;font-size:13.5px;letter-spacing:.03em" style-hover="border-color:rgba(233,229,220,.4)">Read the field notes</a>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:110px">
+    <div style="background:rgba(15,18,24,.78);border:1px solid rgba(233,229,220,.09);border-radius:6px;padding:26px 26px 24px;backdrop-filter:blur(8px)">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:16px"><span style="width:7px;height:7px;border-radius:50%;background:#8ec4d6;animation:lkBreathe 4s ease-in-out infinite"></span><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.24em;color:#8ec4d6">ACTIVE · LIVE</span></div>
+      <div style="font-size:19px;font-weight:600;margin-bottom:8px">FoundMyPro</div>
+      <p style="font-size:14px;line-height:1.65;color:#a39f95;margin:0">A UK local-services discovery platform. Growth, search authority and affiliate revenue first — subscriptions later, if ever.</p>
+      <a href="#" onClick="{{ goSystems }}" style="display:inline-block;margin-top:16px;font-size:12.5px;letter-spacing:.04em">Enter the cluster →</a>
+    </div>
+    <div style="background:rgba(15,18,24,.78);border:1px solid rgba(233,229,220,.09);border-radius:6px;padding:26px 26px 24px;backdrop-filter:blur(8px)">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:16px"><span style="width:7px;height:7px;border-radius:50%;background:#d8a35f;animation:lkBreathe 5.4s ease-in-out infinite"></span><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.24em;color:#d8a35f">ACTIVE · PRE-LAUNCH</span></div>
+      <div style="font-size:19px;font-weight:600;margin-bottom:8px">Sentinel for Sentry</div>
+      <p style="font-size:14px;line-height:1.65;color:#a39f95;margin:0">A mobile companion for Sentry: focused alerts and informed triage away from the desk. Deliberately unlaunched while liability protections mature.</p>
+      <a href="#" onClick="{{ goSystems }}" style="display:inline-block;margin-top:16px;font-size:12.5px;letter-spacing:.04em">Enter the cluster →</a>
+    </div>
+    <div style="background:rgba(15,18,24,.78);border:1px solid rgba(233,229,220,.09);border-radius:6px;padding:26px 26px 24px;backdrop-filter:blur(8px)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.24em;color:#a39f95;margin-bottom:16px">FEATURED WORKFLOW</div>
+      <div style="font-size:16px;font-weight:600;line-height:1.45;margin-bottom:8px">Research → Plan → Challenge → Implement → Review</div>
+      <p style="font-size:14px;line-height:1.65;color:#a39f95;margin:0">The default operating pattern: no agent writes production code before its plan has survived an adversarial challenge.</p>
+      <a href="#" onClick="{{ goWorkflows }}" style="display:inline-block;margin-top:16px;font-size:12.5px;letter-spacing:.04em">Follow the route →</a>
+    </div>
+    <div style="background:rgba(15,18,24,.78);border:1px solid rgba(233,229,220,.09);border-radius:6px;padding:26px 26px 24px;backdrop-filter:blur(8px)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.24em;color:#a39f95;margin-bottom:16px">LATEST FIELD NOTE</div>
+      <div style="font-size:16px;font-weight:600;line-height:1.45;margin-bottom:8px">The cheapest agent is a bash script</div>
+      <p style="font-size:14px;line-height:1.65;color:#a39f95;margin:0">Where the automation continuum actually pays: replacing an agent loop with forty lines of deterministic shell.</p>
+      <a href="#" onClick="{{ goNotes }}" style="display:inline-block;margin-top:16px;font-size:12.5px;letter-spacing:.04em">Read in Field Notes →</a>
+    </div>
+  </div>
+
+  <div style="margin-top:96px;display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start;border-top:1px solid rgba(233,229,220,.08);padding-top:34px">
+    <div style="flex:1 1 380px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.24em;color:#a39f95;margin-bottom:14px">HOW IT CONNECTS</div>
+      <p style="font-size:14.5px;line-height:1.7;color:#a39f95;margin:0;max-width:560px">Products generate engineering problems. Problems become workflows. Workflows harden into automation. What the work teaches becomes field notes — and the notes route back into the products. Open the <a href="#" onClick="{{ toggleMap }}">lattice map</a> to travel the structure directly.</p>
+    </div>
+    <div style="flex:0 1 340px;font-size:13.5px;line-height:1.7;color:#7d7a72">Quietly open to conversations about senior engineering roles and product collaborations where agentic workflows matter. <a href="#" onClick="{{ goContact }}">Open a connection</a>.</div>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ pSystems }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="Systems — Built in the Real World" style="max-width:1060px;margin:0 auto;padding:120px clamp(20px,4vw,48px) 110px">
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.3em;color:#8ec4d6;margin-bottom:22px">SYSTEMS</div>
+  <h1 style="font-size:clamp(28px,3.6vw,42px);font-weight:600;letter-spacing:-0.015em;margin:0 0 14px">Built in the Real World</h1>
+  <p style="font-size:16px;line-height:1.7;color:#a39f95;max-width:640px;margin:0 0 20px">Products as evolving systems, not case-study trophies. Each cluster holds the product, its architecture, the agents that work on it, the automation around it, the commercial model, and the questions still open.</p>
+  <div style="display:flex;gap:18px;flex-wrap:wrap;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.2em;color:#7d7a72;margin-bottom:56px">
+    <span style="display:flex;align-items:center;gap:7px"><span style="width:6px;height:6px;border-radius:50%;background:#8ec4d6"></span>LIVE</span>
+    <span style="display:flex;align-items:center;gap:7px"><span style="width:6px;height:6px;border-radius:50%;background:#d8a35f"></span>IN DEVELOPMENT</span>
+    <span style="display:flex;align-items:center;gap:7px"><span style="width:6px;height:6px;border-radius:50%;background:#7d7a72"></span>EXPERIMENTAL</span>
+    <span style="display:flex;align-items:center;gap:7px"><span style="width:6px;height:6px;border-radius:50%;border:1px solid #7d7a72;background:none"></span>PLANNED</span>
+  </div>
+
+  <section style="background:rgba(15,18,24,.78);border:1px solid rgba(233,229,220,.09);border-radius:8px;padding:clamp(24px,4vw,42px);backdrop-filter:blur(8px);margin-bottom:28px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span style="width:8px;height:8px;border-radius:50%;background:#8ec4d6;animation:lkBreathe 4s ease-in-out infinite"></span><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.24em;color:#8ec4d6">LIVE</span></div>
+    <h2 style="font-size:27px;font-weight:600;margin:6px 0 10px">FoundMyPro</h2>
+    <p style="font-size:15px;line-height:1.7;color:#a39f95;max-width:680px;margin:0 0 30px">Most local search is built around premises: a pin on a map, an address, opening hours. That works for shops — and fails the mobile professionals who come to you. A plumber, mobile hairdresser or dog groomer with no storefront is nearly invisible in map-based tools, which surface the traditional in-store options instead. FoundMyPro exists to give these come-to-you professionals a place of relevance online: structured provider and service data organised around where they work rather than where they sit, strong local search, and an affiliate model that earns from connections rather than charging providers before the platform has proven its value.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px">
+      <sc-for list="{{ fmpFacets }}" as="f" hint-placeholder-count="8">
+        <div style="border:1px solid rgba(233,229,220,.08);border-radius:5px;padding:18px 20px;background:rgba(8,10,14,.4)">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.2em;color:#8ec4d6;margin-bottom:9px">{{ f.tag }}</div>
+          <p style="font-size:13.5px;line-height:1.65;color:#b8b4ab;margin:0">{{ f.body }}</p>
+        </div>
+      </sc-for>
+    </div>
+    <div style="margin-top:26px;border-top:1px solid rgba(233,229,220,.08);padding-top:20px;display:flex;flex-wrap:wrap;gap:24px">
+      <div style="flex:1 1 300px"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.2em;color:#d8a35f;margin-bottom:8px">OPEN QUESTIONS</div><p style="font-size:13.5px;line-height:1.65;color:#a39f95;margin:0">How far affiliate revenue scales before provider-side products make sense. Whether programmatic local pages hold rankings as search itself becomes answer-driven.</p></div>
+      <div style="flex:1 1 300px"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.2em;color:#d8a35f;margin-bottom:8px">LESSONS</div><p style="font-size:13.5px;line-height:1.65;color:#a39f95;margin:0">Operating a real platform disciplines ambition: every feature competes with data quality work, and data quality usually wins. Speed came from cutting scope, not adding agents.</p></div>
+    </div>
+  </section>
+
+  <section style="background:rgba(15,18,24,.78);border:1px solid rgba(233,229,220,.09);border-radius:8px;padding:clamp(24px,4vw,42px);backdrop-filter:blur(8px)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span style="width:8px;height:8px;border-radius:50%;background:#d8a35f;animation:lkBreathe 5.4s ease-in-out infinite"></span><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.24em;color:#d8a35f">PRE-LAUNCH</span></div>
+    <h2 style="font-size:27px;font-weight:600;margin:6px 0 10px">Sentinel for Sentry</h2>
+    <p style="font-size:15px;line-height:1.7;color:#a39f95;max-width:680px;margin:0 0 30px">A mobile companion for software teams that need a clear view of production when they are away from a desk. It turns selected Sentry events into focused alerts, brings the evidence needed for a first assessment onto the phone, and supports deliberate triage without trying to replace Sentry or a paging platform.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px">
+      <sc-for list="{{ sentinelFacets }}" as="f" hint-placeholder-count="5">
+        <div style="border:1px solid rgba(233,229,220,.08);border-radius:5px;padding:18px 20px;background:rgba(8,10,14,.4)">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.2em;color:#d8a35f;margin-bottom:9px">{{ f.tag }}</div>
+          <p style="font-size:13.5px;line-height:1.65;color:#b8b4ab;margin:0">{{ f.body }}</p>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+  <p style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:#5d5a53;margin-top:26px">No invented metrics, customers or revenue appear on this page. Numbers arrive when they exist.</p>
+</div>
+</sc-if>
+
+<sc-if value="{{ pSdlc }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="Agentic SDLC" style="max-width:1060px;margin:0 auto;padding:120px clamp(20px,4vw,48px) 110px">
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.3em;color:#8ec4d6;margin-bottom:22px">AGENTIC SDLC</div>
+  <h1 style="font-size:clamp(28px,3.6vw,42px);font-weight:600;letter-spacing:-0.015em;margin:0 0 14px">Engineering the Workflow</h1>
+  <p style="font-size:16px;line-height:1.7;color:#a39f95;max-width:680px;margin:0">Agentic development is not "ask AI to build the app". It is the deliberate design of context, constraints, permissions, feedback loops, checkpoints, independent verification, escalation rules and ownership — across the whole lifecycle, without surrendering engineering judgement.</p>
+
+  <div style="margin-top:56px">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.24em;color:#a39f95;margin-bottom:18px">THE LIFECYCLE AS A CONNECTED SYSTEM — SELECT A STAGE</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      <sc-for list="{{ sdlcStages }}" as="s" hint-placeholder-count="15">
+        <button onClick="{{ s.select }}" style="background:{{ s.bg }};border:1px solid {{ s.border }};color:{{ s.color }};font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em;padding:9px 13px;border-radius:3px;cursor:pointer;transition:all .2s" style-hover="border-color:rgba(142,196,214,.6)">{{ s.label }}</button>
+      </sc-for>
+    </div>
+    <div style="margin-top:22px;background:rgba(15,18,24,.78);border:1px solid rgba(233,229,220,.09);border-radius:6px;padding:28px clamp(20px,3vw,32px);backdrop-filter:blur(8px)">
+      <div style="display:flex;flex-wrap:wrap;gap:30px">
+        <div style="flex:1 1 320px">
+          <div style="font-size:18px;font-weight:600;margin-bottom:10px">{{ stageName }}</div>
+          <p style="font-size:14.5px;line-height:1.7;color:#a39f95;margin:0">{{ stageDetail }}</p>
+        </div>
+        <div style="flex:1 1 320px;display:flex;flex-direction:column;gap:10px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.2em;color:#a39f95;margin-bottom:2px">WHO HOLDS RESPONSIBILITY HERE</div>
+          <sc-for list="{{ stageActors }}" as="a" hint-placeholder-count="6">
+            <div style="display:flex;align-items:center;gap:12px">
+              <span style="width:150px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.06em;color:#b8b4ab">{{ a.name }}</span>
+              <span style="flex:1;height:4px;background:rgba(233,229,220,.08);border-radius:2px;overflow:hidden;display:block"><span style="display:block;height:100%;width:{{ a.w }};background:{{ a.fill }};transition:width .5s ease"></span></span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:80px">
+    <h2 style="font-family:'IBM Plex Mono',monospace;font-size:15px;letter-spacing:.28em;color:#d8a35f;font-weight:500;margin:0 0 10px">WHERE AGENTS FAIL</h2>
+    <p style="font-size:14.5px;line-height:1.7;color:#a39f95;max-width:640px;margin:0 0 26px">The workflow exists because these failure modes are predictable. Each one is a terminated path in the lattice: observed, named, and designed around.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">
+      <sc-for list="{{ failures }}" as="f" hint-placeholder-count="10">
+        <div onClick="{{ f.flip }}" style="perspective:1200px;cursor:pointer">
+          <div style="display:grid;transform-style:preserve-3d;transition:transform .55s cubic-bezier(.4,.1,.2,1);transform:{{ f.flipped }};min-height:100%">
+            <div style="grid-area:1/1;backface-visibility:hidden;border:1px solid rgba(216,163,95,.16);border-radius:5px;padding:16px 18px 34px 18px;background:rgba(15,18,24,.92);position:relative">
+              <div style="display:flex;align-items:center;gap:9px;margin-bottom:7px"><span style="width:14px;height:1px;background:#d8a35f;display:block"></span><span style="font-size:13.5px;font-weight:600">{{ f.name }}</span></div>
+              <p style="font-size:13px;line-height:1.6;color:#a39f95;margin:0">{{ f.problem }}</p>
+              <span title="Flip for mitigation" style="position:absolute;bottom:10px;right:12px;font-family:'IBM Plex Mono',monospace;font-size:19px;color:#d8a35f;opacity:.8">⟲</span>
+            </div>
+            <div style="grid-area:1/1;backface-visibility:hidden;transform:rotateY(180deg);border:1px solid rgba(142,196,214,.28);border-radius:5px;padding:16px 18px 34px 18px;background:rgba(15,22,28,.96);position:relative">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.2em;color:#8ec4d6;margin-bottom:8px">MITIGATION</div>
+              <p style="font-size:13px;line-height:1.6;color:#b8b4ab;margin:0">{{ f.fix }}</p>
+              <span title="Flip back" style="position:absolute;bottom:10px;right:12px;font-family:'IBM Plex Mono',monospace;font-size:19px;color:#8ec4d6;opacity:.8">⟲</span>
+            </div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ pWorkflows }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="Workflows — Agent Operating Patterns" style="max-width:1060px;margin:0 auto;padding:120px clamp(20px,4vw,48px) 110px">
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.3em;color:#8ec4d6;margin-bottom:22px">WORKFLOWS</div>
+  <h1 style="font-size:clamp(28px,3.6vw,42px);font-weight:600;letter-spacing:-0.015em;margin:0 0 14px">Agent Operating Patterns</h1>
+  <p style="font-size:16px;line-height:1.7;color:#a39f95;max-width:640px;margin:0 0 56px">A library of reusable patterns. Each defines the problem, the routing of work between human and agents, how the output is validated, and — as importantly — when not to use it.</p>
+
+  <section style="background:rgba(15,18,24,.78);border:1px solid rgba(142,196,214,.22);border-radius:8px;padding:clamp(24px,4vw,40px);backdrop-filter:blur(8px);margin-bottom:20px">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.24em;color:#8ec4d6;margin-bottom:10px">PATTERN 01 · FULLY DEVELOPED</div>
+    <h2 style="font-size:23px;font-weight:600;margin:0 0 20px">Research → Plan → Challenge → Implement → Review</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:28px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.08em">
+      <sc-for list="{{ patternStages }}" as="ps" hint-placeholder-count="5">
+        <span style="display:flex;align-items:center;gap:6px"><span style="padding:8px 13px;border:1px solid {{ ps.border }};border-radius:3px;color:{{ ps.color }};background:{{ ps.bg }}">{{ ps.label }}</span><span style="color:#5d5a53">{{ ps.arrow }}</span></span>
+      </sc-for>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px">
+      <sc-for list="{{ patternFields }}" as="pf" hint-placeholder-count="7">
+        <div style="border-top:1px solid rgba(233,229,220,.1);padding-top:14px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.2em;color:{{ pf.accent }};margin-bottom:8px">{{ pf.tag }}</div>
+          <p style="font-size:13.5px;line-height:1.65;color:#b8b4ab;margin:0">{{ pf.body }}</p>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">
+    <sc-for list="{{ patterns }}" as="p" hint-placeholder-count="7">
+      <div style="background:rgba(15,18,24,.7);border:1px solid rgba(233,229,220,.08);border-radius:6px;padding:22px 24px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.2em;color:#7d7a72;margin-bottom:10px">{{ p.num }}</div>
+        <div style="font-size:15.5px;font-weight:600;margin-bottom:8px">{{ p.name }}</div>
+        <p style="font-size:13.5px;line-height:1.6;color:#a39f95;margin:0 0 12px">{{ p.problem }}</p>
+        <p style="font-size:12.5px;line-height:1.6;color:#7d7a72;margin:0"><span style="color:#d8a35f;font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.16em">NOT WHEN · </span>{{ p.notWhen }}</p>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ pAutomation }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="Automation" style="max-width:1060px;margin:0 auto;padding:120px clamp(20px,4vw,48px) 110px">
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.3em;color:#8ec4d6;margin-bottom:22px">AUTOMATION</div>
+  <h1 style="font-size:clamp(28px,3.6vw,42px);font-weight:600;letter-spacing:-0.015em;margin:0 0 14px">Remove the Repetition</h1>
+  <p style="font-size:16px;line-height:1.7;color:#a39f95;max-width:640px;margin:0 0 50px">Scripts, tools and small systems that eliminate repetitive engineering work. Two rules govern everything here: automation is a continuum, and not every task deserves an agent — a deterministic script is often cheaper, safer and better.</p>
+  <div style="display:flex;flex-wrap:wrap;gap:0;align-items:stretch;margin-bottom:60px;border:1px solid rgba(233,229,220,.09);border-radius:6px;overflow:hidden">
+    <sc-for list="{{ continuum }}" as="c" hint-placeholder-count="5">
+      <div style="flex:1 1 150px;padding:20px 18px;border-right:1px solid rgba(233,229,220,.07);background:{{ c.bg }}">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.18em;color:{{ c.color }};margin-bottom:8px">{{ c.label }}</div>
+        <p style="font-size:12.5px;line-height:1.55;color:#a39f95;margin:0">{{ c.body }}</p>
+      </div>
+    </sc-for>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px">
+    <sc-for list="{{ automations }}" as="a" hint-placeholder-count="10">
+      <div style="border:1px solid rgba(233,229,220,.08);border-radius:5px;padding:18px 20px;background:rgba(15,18,24,.6)">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px"><span style="font-size:14px;font-weight:600">{{ a.name }}</span><span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.14em;color:{{ a.tierColor }};flex:none">{{ a.tier }}</span></div>
+        <p style="font-size:13px;line-height:1.6;color:#a39f95;margin:0">{{ a.body }}</p>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ pTooling }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="AI Tooling — Value per Subscription" style="max-width:1060px;margin:0 auto;padding:120px clamp(20px,4vw,48px) 110px">
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.3em;color:#8ec4d6;margin-bottom:22px">AI TOOLING</div>
+  <h1 style="font-size:clamp(28px,3.6vw,42px);font-weight:600;letter-spacing:-0.015em;margin:0 0 14px">Value per Subscription</h1>
+  <p style="font-size:16px;line-height:1.7;color:#a39f95;max-width:660px;margin:0 0 50px">Getting the most from Codex, Claude and similar subscriptions — without brand worship. The useful question is not "which model is best" but which <em>role</em> each tool plays in a workflow, and when a local script makes the whole question moot.</p>
+
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.24em;color:#a39f95;margin-bottom:18px">ROLES, NOT RANKINGS — SELECT A ROLE</div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px">
+    <sc-for list="{{ roles }}" as="r" hint-placeholder-count="8">
+      <button onClick="{{ r.select }}" style="background:{{ r.bg }};border:1px solid {{ r.border }};color:{{ r.color }};font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em;padding:9px 13px;border-radius:3px;cursor:pointer" style-hover="border-color:rgba(142,196,214,.6)">{{ r.label }}</button>
+    </sc-for>
+  </div>
+  <div style="background:rgba(15,18,24,.78);border:1px solid rgba(233,229,220,.09);border-radius:6px;padding:26px clamp(20px,3vw,30px);margin-bottom:70px">
+    <div style="font-size:17px;font-weight:600;margin-bottom:8px">{{ roleName }}</div>
+    <p style="font-size:14.5px;line-height:1.7;color:#a39f95;margin:0 0 14px">{{ roleBody }}</p>
+    <p style="font-size:13px;line-height:1.6;color:#7d7a72;margin:0"><span style="color:#d8a35f;font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.16em">DISCIPLINE · </span>{{ roleDiscipline }}</p>
+  </div>
+
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.24em;color:#a39f95;margin-bottom:8px">WORKFLOW DESIGNER — A CONCEPTUAL TOOL</div>
+  <p style="font-size:13.5px;line-height:1.65;color:#7d7a72;max-width:620px;margin:0 0 24px">Slide the characteristics of a task; the recommendation describes workflow <em>shape</em>, not prices or capabilities. Where live data would be needed, this stays deliberately conceptual. [VERIFY current subscription limits before relying on any cost assumption]</p>
+  <div style="background:rgba(15,18,24,.78);border:1px solid rgba(233,229,220,.09);border-radius:6px;padding:28px clamp(20px,3vw,32px);display:flex;flex-wrap:wrap;gap:36px">
+    <div style="flex:1 1 300px;display:flex;flex-direction:column;gap:20px">
+      <sc-for list="{{ calcSliders }}" as="cs" hint-placeholder-count="5">
+        <label style="display:block">
+          <span style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.12em;color:#b8b4ab;margin-bottom:8px"><span>{{ cs.label }}</span><span style="color:#8ec4d6">{{ cs.valueLabel }}</span></span>
+          <input type="range" min="0" max="4" step="1" value="{{ cs.value }}" onChange="{{ cs.set }}" style="width:100%;accent-color:#8ec4d6">
+        </label>
+      </sc-for>
+    </div>
+    <div style="flex:1 1 300px;border-left:1px solid rgba(233,229,220,.08);padding-left:clamp(0px,3vw,32px)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.2em;color:#8ec4d6;margin-bottom:12px">RECOMMENDED SHAPE</div>
+      <div style="font-size:17px;font-weight:600;margin-bottom:10px">{{ calcTitle }}</div>
+      <sc-for list="{{ calcLines }}" as="cl" hint-placeholder-count="4">
+        <p style="font-size:13.5px;line-height:1.65;color:#a39f95;margin:0 0 10px;display:flex;gap:10px"><span style="color:#5d5a53;flex:none">—</span><span>{{ cl.text }}</span></p>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ pLab }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="Lab — Experiments in Progress" style="max-width:1060px;margin:0 auto;padding:120px clamp(20px,4vw,48px) 110px">
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.3em;color:#8ec4d6;margin-bottom:22px">LAB</div>
+  <h1 style="font-size:clamp(28px,3.6vw,42px);font-weight:600;letter-spacing:-0.015em;margin:0 0 14px">Experiments in Progress</h1>
+  <p style="font-size:16px;line-height:1.7;color:#a39f95;max-width:620px;margin:0 0 50px">Unfinished by design. Discarded experiments stay visible — knowing when to stop is part of the method.</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px">
+    <sc-for list="{{ labItems }}" as="l" hint-placeholder-count="6">
+      <div style="border:1px solid rgba(233,229,220,.08);border-radius:6px;padding:22px 24px;background:rgba(15,18,24,.65);opacity:{{ l.opacity }}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><span style="width:6px;height:6px;border-radius:50%;background:{{ l.dot }}"></span><span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.2em;color:{{ l.statusColor }}">{{ l.status }}</span></div>
+        <div style="font-size:15.5px;font-weight:600;margin-bottom:8px;text-decoration:{{ l.strike }}">{{ l.name }}</div>
+        <p style="font-size:13.5px;line-height:1.6;color:#a39f95;margin:0">{{ l.body }}</p>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ pNotes }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="Field Notes" style="max-width:1060px;margin:0 auto;padding:120px clamp(20px,4vw,48px) 110px">
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.3em;color:#8ec4d6;margin-bottom:22px">FIELD NOTES</div>
+  <h1 style="font-size:clamp(28px,3.6vw,42px);font-weight:600;letter-spacing:-0.015em;margin:0 0 14px">What the Work Teaches</h1>
+  <p style="font-size:16px;line-height:1.7;color:#a39f95;max-width:620px;margin:0 0 36px">Writing that accumulates rather than scrolls. Every note is connected to the system or workflow it came from — follow a note back to its origin and the route lights up.</p>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:36px">
+    <sc-for list="{{ noteCats }}" as="nc" hint-placeholder-count="8">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;padding:7px 12px;border:1px solid rgba(233,229,220,.12);border-radius:3px;color:#a39f95">{{ nc }}</span>
+    </sc-for>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <sc-for list="{{ notes }}" as="n" hint-placeholder-count="6">
+      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;border:1px solid rgba(233,229,220,.08);border-radius:6px;padding:20px 24px;background:rgba(15,18,24,.65)">
+        <div style="flex:1 1 340px">
+          <div style="font-size:16px;font-weight:600;margin-bottom:6px">{{ n.title }}</div>
+          <p style="font-size:13.5px;line-height:1.6;color:#a39f95;margin:0">{{ n.body }}</p>
+        </div>
+        <div style="flex:0 1 auto;display:flex;flex-direction:column;gap:6px;align-items:flex-end;font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.16em">
+          <span style="color:#7d7a72">{{ n.cat }}</span>
+          <a href="#" onClick="{{ n.go }}" style="color:#8ec4d6">↳ {{ n.origin }}</a>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ pAbout }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="About" style="max-width:900px;margin:0 auto;padding:120px clamp(20px,4vw,48px) 110px">
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.3em;color:#8ec4d6;margin-bottom:22px">ABOUT</div>
+  <h1 style="font-size:clamp(28px,3.6vw,42px);font-weight:600;letter-spacing:-0.015em;margin:0 0 40px">The Engineer Behind the System</h1>
+  <div style="display:flex;flex-wrap:wrap;gap:40px;align-items:flex-start">
+    <img src="uploads/portrait-optimised.png" alt="Eduardo Neto" style="width:200px;height:200px;object-fit:cover;border-radius:6px;border:1px solid rgba(233,229,220,.12);flex:none">
+    <div style="flex:1 1 400px;font-size:15px;line-height:1.75;color:#b8b4ab">
+      <p style="margin:0 0 18px">Software engineer with enterprise application experience, building products on the side and treating AI-assisted development as an engineering discipline rather than a shortcut.</p>
+      <p style="margin:0 0 18px">Before software: years leading hospitality operations. That background still shows — service as a standard rather than a slogan, calm under pressure, and attention to the operational details that decide whether a system actually works for the people using it.</p>
+      <p style="margin:0 0 18px">The current focus is agentic software development: designing the context, constraints and verification around AI agents so their speed becomes reliable output. The products on this site are where those methods get tested against reality.</p>
+      <p style="margin:0 0 22px;color:#7d7a72;font-size:14px">Preference: useful systems over demonstrations. If it doesn't run in production, it's a hypothesis.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <a href="https://github.com/latticeknight" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(233,229,220,.15);border-radius:3px;padding:9px 15px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;color:#a39f95" style-hover="border-color:rgba(142,196,214,.5);color:#8ec4d6"><span style="width:6px;height:6px;border-radius:50%;background:#8ec4d6;display:block"></span>GITHUB</a>
+        <a href="https://www.linkedin.com/in/eduardo-neto-b71bb36b/" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(233,229,220,.15);border-radius:3px;padding:9px 15px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;color:#a39f95" style-hover="border-color:rgba(142,196,214,.5);color:#8ec4d6"><span style="width:6px;height:6px;border-radius:50%;background:#8ec4d6;display:block"></span>LINKEDIN</a>
+      </div>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ pContact }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="Contact — Open a Connection" style="max-width:760px;margin:0 auto;padding:120px clamp(20px,4vw,48px) 110px">
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.3em;color:#8ec4d6;margin-bottom:22px">CONTACT</div>
+  <h1 style="font-size:clamp(28px,3.6vw,42px);font-weight:600;letter-spacing:-0.015em;margin:0 0 14px">Open a Connection</h1>
+  <p style="font-size:16px;line-height:1.7;color:#a39f95;margin:0 0 44px">A message creates a new node in the lattice. Pick the edge it should attach to — or just write.</p>
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <sc-for list="{{ contactRoutes }}" as="c" hint-placeholder-count="5">
+      <a href="{{ c.href }}" style="display:flex;align-items:center;gap:16px;border:1px solid rgba(233,229,220,.1);border-radius:6px;padding:18px 22px;background:rgba(15,18,24,.65);color:#e9e5dc;transition:border-color .2s" style-hover="border-color:rgba(142,196,214,.45)">
+        <span style="width:8px;height:8px;border-radius:50%;border:1px solid #8ec4d6;flex:none;display:block"></span>
+        <span style="flex:1"><span style="display:block;font-size:15px;font-weight:600">{{ c.name }}</span><span style="display:block;font-size:13px;color:#a39f95;margin-top:3px">{{ c.body }}</span></span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8ec4d6;flex:none">→</span>
+      </a>
+    </sc-for>
+  </div>
+  <p style="font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.8;letter-spacing:.04em;color:#5d5a53;margin-top:36px">hello@eduardoneto.com · <a href="https://github.com/latticeknight" target="_blank" rel="noopener" style="color:#7d7a72" style-hover="color:#8ec4d6">github</a> · <a href="https://www.linkedin.com/in/eduardo-neto-b71bb36b/" target="_blank" rel="noopener" style="color:#7d7a72" style-hover="color:#8ec4d6">linkedin</a> · replies within a few days, honestly prioritised.</p>
+</div>
+</sc-if>
+
+</main>
+
+<footer style="position:relative;z-index:10;border-top:1px solid rgba(233,229,220,.07);padding:26px clamp(20px,4vw,48px);display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.12em;color:#5d5a53">
+  <span>EDUARDO NETO · LATTICEKNIGHT</span>
+  <span style="display:flex;gap:18px"><a href="https://github.com/latticeknight" target="_blank" rel="noopener" style="color:#7d7a72;letter-spacing:.12em" style-hover="color:#8ec4d6">GITHUB</a><a href="https://www.linkedin.com/in/eduardo-neto-b71bb36b/" target="_blank" rel="noopener" style="color:#7d7a72;letter-spacing:.12em" style-hover="color:#8ec4d6">LINKEDIN</a></span>
+  <span>ONE SYSTEM · {{ visitedCount }} OF 10 REGIONS EXPLORED</span>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;motion&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;auto&quot;,&quot;reduced&quot;],&quot;default&quot;:&quot;auto&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Behaviour&quot;},&quot;latticeDensity&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:14,&quot;min&quot;:3,&quot;max&quot;:14,&quot;step&quot;:1,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Behaviour&quot;},&quot;introMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;every-load&quot;,&quot;once-per-session&quot;,&quot;off&quot;],&quot;default&quot;:&quot;every-load&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Behaviour&quot;}}">
+class Component extends DCLogic {
+  state = { page: 'home', intro: false, introY: '0', mapOpen: false, menuOpen: false, vw: (typeof window!=='undefined'?window.innerWidth:1280), visited: ['home'], transitioning: false, stage: 0, role: 0, sliders: [2,2,2,2,2] };
+
+  constructor(props){ super(props); this.canvasRef = React.createRef(); this.videoRef = React.createRef(); this.mouse = {x:-999,y:-999}; }
+
+  pagesDef(){ return [
+    {id:'home',label:'Home',tag:'HOME'},{id:'systems',label:'Systems',tag:'SYSTEMS'},{id:'sdlc',label:'Agentic SDLC',tag:'SDLC'},
+    {id:'workflows',label:'Workflows',tag:'WORKFLOWS'},{id:'automation',label:'Automation',tag:'AUTOMATION'},{id:'tooling',label:'AI Tooling',tag:'TOOLING'},
+    {id:'lab',label:'Lab',tag:'LAB'},{id:'notes',label:'Field Notes',tag:'NOTES'},{id:'about',label:'About',tag:'ABOUT'},{id:'contact',label:'Contact',tag:'CONTACT'}]; }
+
+  componentDidMount(){
+    this.reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if ((this.props.motion ?? 'auto') === 'reduced') this.reduced = true;
+    const mode = this.props.introMode ?? 'every-load';
+    const seen = mode==='every-load' ? null : (mode==='off' ? '1' : sessionStorage.getItem('lk-intro-seen'));
+    if (!seen && !this.reduced) {
+      this.setState({intro:true});
+      this.introTimer = setTimeout(()=>this.endIntro(), 10000);
+    }
+    sessionStorage.setItem('lk-intro-seen','1');
+    this.initLattice();
+    this.onResize = ()=>{ this.setState({vw:window.innerWidth}); this.sizeCanvas(); this.layout(this.state.page,true); if(this.reduced) this.drawFrame(); };
+    this.onMove = e=>{ this.mouse={x:e.clientX,y:e.clientY}; if(this.reduced) this.drawFrame(); };
+    window.addEventListener('resize',this.onResize);
+    window.addEventListener('mousemove',this.onMove);
+  }
+  componentWillUnmount(){ cancelAnimationFrame(this.raf); clearTimeout(this.introTimer); clearTimeout(this.navTimer);
+    window.removeEventListener('resize',this.onResize); window.removeEventListener('mousemove',this.onMove); }
+
+  endIntro(){ if(!this.state.intro || this.state.introY!=='0') return; clearTimeout(this.introTimer);
+    this.setState({introY:'-100%'}); // video keeps playing while the panel slides
+    const v=this.videoRef.current;
+    if(v){ const v0=v.volume>0?v.volume:1; let k=0; clearInterval(this.fadeInt);
+      this.fadeInt=setInterval(()=>{ k+=0.035; const vol=Math.max(v0*(1-k),0);
+        try{ v.volume=vol; }catch(err){}
+        if(k>=1){ clearInterval(this.fadeInt); v.muted=true; v.pause(); } },70); }
+    setTimeout(()=>this.setState({intro:false,introY:'0'}),2100); }
+
+  navigate(id){
+    if (id===this.state.page){ this.setState({mapOpen:false, menuOpen:false}); return; }
+    const from = this.state.page;
+    this.pulse = { from, to:id, t:0 };
+    const visited = this.state.visited.includes(id)?this.state.visited:[...this.state.visited,id];
+    this.setState({transitioning:true, mapOpen:false, menuOpen:false, visited});
+    clearTimeout(this.navTimer);
+    const delay = this.reduced?0:420;
+    this.navTimer = setTimeout(()=>{
+      this.setState({page:id, transitioning:false});
+      window.scrollTo(0,0);
+      this.layout(id,this.reduced);
+      if(this.reduced) this.drawFrame();
+    }, delay);
+  }
+
+  // ---- lattice engine ----
+  sizeCanvas(){ const c=this.canvasRef.current; if(!c) return; const d=Math.min(window.devicePixelRatio||1,2);
+    c.width=innerWidth*d; c.height=innerHeight*d; this.ctx=c.getContext('2d'); this.ctx.setTransform(d,0,0,d,0,0); }
+
+  rnd(){ this.seed=(this.seed*16807)%2147483647; return this.seed/2147483647; }
+
+  initLattice(){
+    if(!this.canvasRef.current) return;
+    this.seed = 42; this.sizeCanvas();
+    const density = this.props.latticeDensity ?? 7;
+    const pages = this.pagesDef();
+    this.nodes=[]; this.edges=[];
+    pages.forEach((p,ci)=>{
+      const n = ci===0? density+3 : density;
+      const start=this.nodes.length;
+      for(let i=0;i<n;i++){
+        this.nodes.push({c:p.id, a:this.rnd()*Math.PI*2, r:0.25+this.rnd()*0.75, x:innerWidth/2, y:innerHeight/2, tx:0, ty:0,
+          amber: this.rnd()<0.14, ph:this.rnd()*Math.PI*2, sz:1+this.rnd()*1.6});
+      }
+      for(let i=0;i<n;i++){ // intra-cluster edges
+        const a=start+i, b=start+((i+1+Math.floor(this.rnd()*2))%n);
+        if(a!==b) this.edges.push([a,b]);
+        if(this.rnd()<0.5) this.edges.push([a, start+Math.floor(this.rnd()*n)]);
+      }
+    });
+    // cross-cluster links (meaningful routes)
+    const routes=[['home','systems'],['home','sdlc'],['home','notes'],['systems','sdlc'],['sdlc','workflows'],['workflows','automation'],['automation','tooling'],['notes','systems'],['about','contact'],['home','lab'],['lab','workflows'],['notes','workflows']];
+    routes.forEach(([a,b])=>{
+      const na=this.nodes.filter(n=>n.c===a), nb=this.nodes.filter(n=>n.c===b);
+      this.edges.push([this.nodes.indexOf(na[0]), this.nodes.indexOf(nb[0])]);
+    });
+    this.layout(this.state.page,true);
+    if(this.reduced){ this.drawFrame(); } else { const loop=()=>{ this.tick(); this.raf=requestAnimationFrame(loop); }; loop(); }
+  }
+
+  anchor(cid, active){
+    const pages=this.pagesDef(); const i=pages.findIndex(p=>p.id===cid);
+    const W=innerWidth,H=innerHeight;
+    if(cid===active) return {x:W*0.5, y:H*0.46, r:Math.min(W,H)*0.34};
+    const others = pages.filter(p=>p.id!==active); const j=others.findIndex(p=>p.id===cid);
+    const ang = (j/others.length)*Math.PI*2 - Math.PI/2;
+    return {x: W*0.5 + Math.cos(ang)*W*0.44, y: H*0.46 + Math.sin(ang)*H*0.42, r: Math.min(W,H)*0.055};
+  }
+
+  layout(active, immediate){
+    this.nodes.forEach(n=>{
+      const a=this.anchor(n.c, active);
+      n.tx = a.x + Math.cos(n.a)*a.r*n.r;
+      n.ty = a.y + Math.sin(n.a)*a.r*n.r;
+      if(immediate){ n.x=n.tx; n.y=n.ty; }
+    });
+  }
+
+  clusterAlpha(cid){
+    if(cid===this.state.page) return 1;
+    if(this.state.visited.includes(cid)) return 0.45;
+    return 0.16;
+  }
+
+  tick(){
+    const t=performance.now()/1000;
+    this.nodes.forEach(n=>{
+      n.x += (n.tx-n.x)*0.055; n.y += (n.ty-n.y)*0.055;
+      const dx=n.x-this.mouse.x, dy=n.y-this.mouse.y, d=Math.hypot(dx,dy);
+      n.ox = d<150? dx/d*(150-d)*0.10 : 0; n.oy = d<150? dy/d*(150-d)*0.10 : 0;
+      n.bx = Math.sin(t*0.4+n.ph)*3; n.by = Math.cos(t*0.33+n.ph)*3;
+    });
+    if(this.pulse){ this.pulse.t+=0.022; if(this.pulse.t>1) this.pulse=null; }
+    this.drawFrame(t);
+  }
+
+  drawFrame(t){
+    const ctx=this.ctx; if(!ctx) return; t=t||0;
+    ctx.clearRect(0,0,innerWidth,innerHeight);
+    const px=n=>n.x+(n.ox||0)+(n.bx||0), py=n=>n.y+(n.oy||0)+(n.by||0);
+    this.edges.forEach(([a,b])=>{
+      const na=this.nodes[a], nb=this.nodes[b]; if(!na||!nb) return;
+      const alpha = Math.min(this.clusterAlpha(na.c), this.clusterAlpha(nb.c)) * (na.c===nb.c?0.22:0.3);
+      ctx.strokeStyle=`rgba(142,196,214,${alpha})`; ctx.lineWidth=0.7;
+      ctx.beginPath(); ctx.moveTo(px(na),py(na)); ctx.lineTo(px(nb),py(nb)); ctx.stroke();
+    });
+    this.nodes.forEach(n=>{
+      const al=this.clusterAlpha(n.c);
+      const col = n.amber? `rgba(216,163,95,${0.85*al})` : `rgba(180,214,226,${0.8*al})`;
+      ctx.fillStyle=col; ctx.beginPath(); ctx.arc(px(n),py(n), n.sz*(n.c===this.state.page?1.3:1), 0, Math.PI*2); ctx.fill();
+      if(al>0.4 && n.sz>2){ ctx.fillStyle = n.amber?`rgba(216,163,95,${0.1*al})`:`rgba(142,196,214,${0.1*al})`;
+        ctx.beginPath(); ctx.arc(px(n),py(n), n.sz*5,0,Math.PI*2); ctx.fill(); }
+    });
+    if(this.pulse){
+      const fa=this.anchor(this.pulse.from,this.state.page), ta=this.anchor(this.pulse.to,this.state.page);
+      const e=this.pulse.t, x=fa.x+(ta.x-fa.x)*e, y=fa.y+(ta.y-fa.y)*e;
+      ctx.strokeStyle=`rgba(142,196,214,${0.35*(1-e)})`; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(fa.x,fa.y); ctx.lineTo(x,y); ctx.stroke();
+      ctx.fillStyle='rgba(200,235,245,0.9)'; ctx.beginPath(); ctx.arc(x,y,2.6,0,Math.PI*2); ctx.fill();
+    }
+  }
+
+  // ---- data ----
+  sdlcData(){ return [
+    {l:'DISCOVERY', d:'Framing the problem before any agent sees it. Agents help survey prior art and competitors; the decision of what is worth building stays human.', a:{Human:3,'Implementation agent':0,'Review agent':0,'Research agent':2,'Testing / validation':0,'CI/CD & production':0}},
+    {l:'REQUIREMENTS', d:'Agents draft and stress-test requirements against edge cases; the human owns priorities and the definition of done.', a:{Human:3,'Implementation agent':1,'Review agent':1,'Research agent':2,'Testing / validation':0,'CI/CD & production':0}},
+    {l:'RESEARCH', d:'The research agent explores libraries, patterns and constraints in a sandbox — findings are treated as leads, not facts, until verified.', a:{Human:1,'Implementation agent':0,'Review agent':1,'Research agent':3,'Testing / validation':0,'CI/CD & production':0}},
+    {l:'ARCHITECTURE', d:'Agents propose and criticise structures; the human chooses, because architecture is where agents most confidently optimise locally.', a:{Human:3,'Implementation agent':1,'Review agent':2,'Research agent':1,'Testing / validation':0,'CI/CD & production':0}},
+    {l:'PLANNING', d:'Work is decomposed into agent-sized, independently verifiable steps with explicit permissions and stop conditions.', a:{Human:3,'Implementation agent':2,'Review agent':1,'Research agent':0,'Testing / validation':0,'CI/CD & production':0}},
+    {l:'CODING', d:'The primary implementation agent works inside a scoped context with named files it may touch. Everything else is off-limits by default.', a:{Human:1,'Implementation agent':3,'Review agent':0,'Research agent':0,'Testing / validation':1,'CI/CD & production':0}},
+    {l:'TESTING', d:'Tests are written or approved before implementation where risk justifies it; a separate loop validates rather than trusting the author agent.', a:{Human:1,'Implementation agent':1,'Review agent':1,'Research agent':0,'Testing / validation':3,'CI/CD & production':1}},
+    {l:'REVIEW', d:'An independent review agent, with no memory of the implementation conversation, reads the diff cold. The human arbitrates disagreements.', a:{Human:2,'Implementation agent':0,'Review agent':3,'Research agent':0,'Testing / validation':1,'CI/CD & production':0}},
+    {l:'DEBUGGING', d:'Reproduction before repair: no fix is accepted until the failure is demonstrated, then demonstrated fixed.', a:{Human:2,'Implementation agent':2,'Review agent':1,'Research agent':1,'Testing / validation':2,'CI/CD & production':0}},
+    {l:'SECURITY', d:'Agents scan and suggest; a human plus deterministic tooling own the final judgement — this is a place agents fail quietly.', a:{Human:3,'Implementation agent':0,'Review agent':2,'Research agent':1,'Testing / validation':2,'CI/CD & production':1}},
+    {l:'DOCUMENTATION', d:'Documentation doubles as executable context for future agent sessions — written for the next agent as much as the next human.', a:{Human:1,'Implementation agent':2,'Review agent':1,'Research agent':0,'Testing / validation':0,'CI/CD & production':0}},
+    {l:'DEPLOYMENT', d:'Deterministic pipelines, not agents, move code. Agents prepare release notes and readiness checks; CI/CD holds the keys.', a:{Human:2,'Implementation agent':0,'Review agent':0,'Research agent':0,'Testing / validation':1,'CI/CD & production':3}},
+    {l:'MONITORING', d:'Production feedback closes the loop — errors and metrics become structured context that routes back into planning.', a:{Human:2,'Implementation agent':0,'Review agent':0,'Research agent':1,'Testing / validation':1,'CI/CD & production':3}},
+    {l:'MAINTENANCE', d:'Dependency updates and small fixes are the safest agent territory: bounded, verifiable, reversible.', a:{Human:1,'Implementation agent':3,'Review agent':1,'Research agent':0,'Testing / validation':2,'CI/CD & production':1}},
+    {l:'RETROSPECTIVES', d:'What did the agents get wrong, and was it predictable? Failure patterns feed the workflow library.', a:{Human:3,'Implementation agent':0,'Review agent':1,'Research agent':1,'Testing / validation':0,'CI/CD & production':1}}]; }
+
+  rolesData(){ return [
+    {l:'EXPLORER', n:'Explorer', b:'Surveys unfamiliar territory: codebases, libraries, APIs, prior art. Optimised for breadth and cheap iteration, not correctness.', d:'Everything the explorer reports is a lead until verified. Never let exploration output flow directly into implementation.'},
+    {l:'ARCHITECT', n:'Architect', b:'Proposes structures, interfaces and trade-offs. Best used adversarially — one architect proposes, another challenges.', d:'The human picks. Agents will defend whichever architecture they generated first.'},
+    {l:'IMPLEMENTER', n:'Implementer', b:'Writes code inside a scoped context: named files, explicit permissions, a plan that already survived challenge.', d:'Scope is the control surface. An implementer with repository-wide write access is a liability, not a productivity gain.'},
+    {l:'REVIEWER', n:'Reviewer', b:'Reads diffs cold, with no memory of the implementation conversation, and reports findings independently.', d:'Independence is the entire value. A reviewer that shares context with the implementer just agrees with it.'},
+    {l:'DEBUGGER', n:'Debugger', b:'Reproduces failures, forms hypotheses, and tests them one at a time. Reproduction before repair, always.', d:'Refuse fixes for bugs that were never demonstrated. "It should work now" is not evidence.'},
+    {l:'DOCS PARTNER', n:'Documentation partner', b:'Maintains docs as executable context — the onboarding material the next agent session will actually consume.', d:'Docs an agent cannot act on are decoration. Test them by starting a fresh session from nothing but the docs.'},
+    {l:'BROWSER OPERATOR', n:'Browser operator', b:'Drives a real browser for verification: flows, forms, visual states, regressions a unit test cannot see.', d:'Use for verification, not discovery — it is slow and expensive per finding.'},
+    {l:'AUTOMATION RUNNER', n:'Automation runner', b:'Executes scripted procedures where a judgement call may occasionally be needed mid-run.', d:'If no judgement is ever needed, delete the agent and keep the script.'}]; }
+
+  calcRec(){
+    const [cx,rk,rep,cost,ver] = this.state.sliders;
+    const lines=[]; let title;
+    if(rep>=3 && cx<=1 && rk<=1){ title='Deterministic script'; lines.push('High repetition with low complexity and low risk is script territory — an agent here adds cost and nondeterminism.'); lines.push('Write it once, version it, and let CI run it.'); }
+    else if(rk>=3){ title='Human-anchored, multi-agent with gates'; lines.push('High risk demands independent verification: separate implementation and review agents with no shared context.'); lines.push('Insert explicit human approval gates before anything irreversible.'); if(ver>=3) lines.push('Add deterministic validation tooling — tests, static analysis — as a third, non-negotiable check.'); }
+    else if(cx>=3){ title='Research → Plan → Challenge → Implement → Review'; lines.push('High complexity earns the full pattern: research first, then a plan that must survive an adversarial challenge before code.'); lines.push('Decompose into independently verifiable steps to keep context manageable.'); }
+    else { title='Single agent, scoped context'; lines.push('Moderate task: one implementation agent with named files, a clear definition of done, and a quick human review.'); }
+    if(cost>=3) lines.push('Cost-sensitive: route research to cheaper models and reserve the strongest model for the step where quality actually compounds.');
+    if(rep>=3 && title!=='Deterministic script') lines.push('Repetition is high — after the second manual run, extract the stable parts into a script and shrink the agent\'s role.');
+    return {title, lines};
+  }
+
+  renderVals(){
+    const S=this.state, nav=id=>e=>{ if(e&&e.preventDefault)e.preventDefault(); this.navigate(id); };
+    const pages=this.pagesDef();
+    const mapPos={home:[50,45],systems:[22,24],sdlc:[50,12],workflows:[78,22],automation:[90,50],tooling:[78,78],lab:[50,88],notes:[22,76],about:[10,50],contact:[32,58]};
+    const stage=this.sdlcData()[S.stage], role=this.rolesData()[S.role], rec=this.calcRec();
+    const sliderDefs=['COMPLEXITY','RISK','REPETITION','COST SENSITIVITY','VERIFICATION NEEDED'];
+    const levels=['MINIMAL','LOW','MODERATE','HIGH','CRITICAL'];
+    return {
+      canvasRef:this.canvasRef, videoRef:this.videoRef,
+      showIntro:S.intro, introY:S.introY, skipIntro:()=>this.endIntro(),
+      mapOpen:S.mapOpen, toggleMap:e=>{ if(e&&e.preventDefault)e.preventDefault(); this.setState({mapOpen:!S.mapOpen, menuOpen:false}); },
+      isMobile:S.vw<760, deskNavDisplay:S.vw<1180?'none':'flex', menuBtnDisplay:S.vw<1180?'inline-flex':'none', brandTagDisplay:S.vw<430?'none':'inline',
+      menuOpen:S.menuOpen, toggleMenu:e=>{ if(e&&e.preventDefault)e.preventDefault(); this.setState({menuOpen:!S.menuOpen, mapOpen:false}); },
+      menuLabel:S.menuOpen?'CLOSE':'MENU',
+      menuItems:pages.map(p=>{ const cur=S.page===p.id, vis=S.visited.includes(p.id);
+        return {label:p.label, tag:p.tag, go:nav(p.id),
+          dot:cur?'#b7dde9':(vis?'#8ec4d6':'rgba(233,229,220,.22)'),
+          glow:cur?'0 0 12px rgba(142,196,214,.7)':'none',
+          color:cur?'#e9e5dc':'#a39f95',
+          border:cur?'rgba(142,196,214,.4)':'rgba(233,229,220,.08)',
+          state:cur?'CURRENT':(vis?'VISITED':'')}; }),
+      pageOpacity:S.transitioning?0:1, pageShift:S.transitioning?'10px':'0px',
+      visitedCount:S.visited.length,
+      goHome:nav('home'), goSystems:nav('systems'), goWorkflows:nav('workflows'), goNotes:nav('notes'), goContact:nav('contact'),
+      pHome:S.page==='home'&&!S.intro||S.page==='home'&&S.intro, pSystems:S.page==='systems', pSdlc:S.page==='sdlc', pWorkflows:S.page==='workflows',
+      pAutomation:S.page==='automation', pTooling:S.page==='tooling', pLab:S.page==='lab', pNotes:S.page==='notes', pAbout:S.page==='about', pContact:S.page==='contact',
+      navItems:pages.map(p=>({label:p.label, go:nav(p.id), color:S.page===p.id?'#e9e5dc':'#8a867d', bg:S.page===p.id?'rgba(142,196,214,.1)':'transparent'})),
+      mapEdges:[['home','systems'],['home','sdlc'],['home','notes'],['home','lab'],['home','about'],['systems','sdlc'],['sdlc','workflows'],['workflows','automation'],['automation','tooling'],['notes','systems'],['notes','workflows'],['lab','workflows'],['about','contact'],['home','contact']].map(([a,b])=>{
+        const cur=(a===S.page||b===S.page), vis=S.visited.includes(a)&&S.visited.includes(b);
+        return {x1:mapPos[a][0], y1:mapPos[a][1], x2:mapPos[b][0], y2:mapPos[b][1],
+          stroke:cur?'rgba(142,196,214,.6)':(vis?'rgba(142,196,214,.32)':'rgba(233,229,220,.13)'),
+          w:cur?1.4:1}; }),
+      mapNodes:pages.map(p=>{ const cur=S.page===p.id, vis=S.visited.includes(p.id);
+        return {tag:p.tag, go:nav(p.id), x:mapPos[p.id][0]+'%', y:mapPos[p.id][1]+'%',
+          size:cur?'16px':'10px', dot:cur?'#b7dde9':(vis?'#8ec4d6':'rgba(233,229,220,.25)'),
+          glow:cur?'0 0 18px rgba(142,196,214,.7)':(vis?'0 0 8px rgba(142,196,214,.35)':'none'),
+          color:cur?'#e9e5dc':(vis?'#a39f95':'#5d5a53')}; }),
+      fmpFacets:[
+        {tag:'THE PROBLEM',body:'Conventional discovery tools assume a business has premises. Mobile professionals who travel to the customer often have no address to anchor a map listing, so searches return in-store options while the come-to-you providers stay invisible.'},
+        {tag:'DISCOVERY & SEARCH',body:'Search-first UX: structured service taxonomies, location-aware queries, and pages designed to answer the question a searcher actually typed.'},
+        {tag:'PROVIDER & SERVICE DATA',body:'The real asset. Structured, verified provider and service data — most engineering effort goes into acquisition, normalisation and freshness.'},
+        {tag:'LOCAL SEO',body:'Programmatic local pages built for genuine usefulness first, rankings second. Search authority is the growth engine, so quality thresholds are strict.'},
+        {tag:'AFFILIATE MONETISATION',body:'Revenue from connecting demand to providers via affiliate partnerships — chosen over subscriptions to keep incentives aligned with users while the platform earns trust.'},
+        {tag:'AUTOMATION',body:'Data pipelines, page generation, freshness checks and rank monitoring are automated; agents assist with content quality review under human sampling.'},
+        {tag:'PRODUCTION DECISIONS',body:'Boring, reliable infrastructure. Every architectural choice is weighed against being one person operating a real platform.'},
+        {tag:'TRADE-OFFS',body:'Ambition versus resources versus speed, decided weekly. The platform grows by compounding data quality, not by feature count.'}],
+      sentinelFacets:[
+        {tag:'INTENDED PROBLEM',body:'Production issues do not wait for an engineer to be at a desk. The normal Sentry workflow is desk-centred, while mobile notifications alone rarely provide enough context to make a sound decision. Sentinel is intended to close that gap between awareness and informed triage.'},
+        {tag:'SYSTEM CONCEPT',body:'Selected Sentry events become push alerts. From the app, an engineer can see whether a workspace is calm or needs attention, inspect issue details, stack traces, tags and activity signals, then resolve, archive, snooze or continue in Sentry. The human remains in control.'},
+        {tag:'RISK & RELIABILITY',body:'Sentinel sits beside a production monitoring workflow, where duplicate alerts, stale state or false confidence can be harmful. Its design treats notifications as hints and Sentry as authoritative, minimises data sent to devices, suppresses duplicates, retries carefully and degrades towards silence and reconciliation when certainty is lost.'},
+        {tag:'LEGAL & BUSINESS CONSTRAINTS',body:'Connecting a workspace can involve Sentry credentials, device identifiers and customer-controlled issue data. That creates serious security, privacy, support and contractual responsibilities. Sentinel is therefore positioned as a best-effort companion for awareness and triage, not a guaranteed pager, primary monitor or autonomous incident-response system.'},
+        {tag:'WHY IT ISN\'T LAUNCHED',body:'The main launch blocker is not a missing feature. It is personal liability. I am not prepared to accept customers while a missed notification, security failure or data incident could expose me directly. Launch requires an appropriate legal entity, suitable insurance and legally reviewed protections before that risk is responsible to take.'}],
+      sdlcStages:this.sdlcData().map((s,i)=>({label:s.l, select:()=>this.setState({stage:i}),
+        bg:i===S.stage?'rgba(142,196,214,.12)':'rgba(15,18,24,.6)', border:i===S.stage?'rgba(142,196,214,.55)':'rgba(233,229,220,.12)', color:i===S.stage?'#b7dde9':'#a39f95'})),
+      stageName:stage.l.charAt(0)+stage.l.slice(1).toLowerCase(), stageDetail:stage.d,
+      stageActors:Object.entries(stage.a).map(([name,v])=>({name:name.toUpperCase(), w:(v/3*100)+'%', fill:name==='Human'?'#d8a35f':'#8ec4d6'})),
+      failures:[
+        {name:'Confident invention',problem:'APIs, flags and behaviours that never existed, delivered with total certainty.',fix:'Verify against real sources — documentation, code, running systems — never against the agent\'s memory. Claims without evidence are leads, not facts.'},
+        {name:'Shallow architecture',problem:'Structures that satisfy the prompt but ignore the system around them.',fix:'Adversarial architecture review before any code: a second agent, or the human, attacks the proposal until it accounts for the whole system.'},
+        {name:'Local optimisation',problem:'Improving the file at the expense of the codebase.',fix:'Explicit scope in every task, plus a reviewer instructed to read beyond the diff and check the consumers of what changed.'},
+        {name:'Context loss',problem:'Long sessions silently forget earlier constraints.',fix:'Short, scoped sessions with deliberate handover documents. Compress context on purpose before the agent loses it by accident.'},
+        {name:'Unnecessary rewrites',problem:'Rewriting working code because rewriting is easier than reading.',fix:'Write permissions on named files only. Everything else is read-only by default — rewriting must be requested, never assumed.'},
+        {name:'Incomplete verification',problem:'"Tests pass" — because the tests were weakened until they passed.',fix:'Independent validation the author agent cannot touch: separate test runs, protected test files, and a reviewer who diffs the tests too.'},
+        {name:'Excessive tool usage',problem:'Ten tool calls where one grep would do — cost, noise and latency.',fix:'Observe traces regularly and prune the workflow. Give agents cheaper deterministic shortcuts and instructions on when to use them.'},
+        {name:'Hidden coupling',problem:'Changes that work locally and break a consumer nobody mentioned.',fix:'Repository onboarding docs and dependency maps as standing context, so every session knows what depends on what before it edits.'},
+        {name:'Security mistakes',problem:'Secrets in logs, permissive defaults, injection-friendly string building.',fix:'Deterministic scanning plus human review on every security-relevant change. Agent self-assessment is never accepted as evidence.'},
+        {name:'Agreeing with flawed assumptions',problem:'The user is wrong and the agent politely proceeds anyway.',fix:'An explicit challenge step whose only job is disagreement — an agent prompted to find what is wrong, not to be helpful.'}].map((f,i)=>({...f, flipped:S.flips&&S.flips[i]?'rotateY(180deg)':'rotateY(0deg)',
+        flip:()=>{ const flips={...(this.state.flips||{})}; flips[i]=!flips[i]; this.setState({flips}); }})),
+      patternStages:['RESEARCH','PLAN','CHALLENGE','IMPLEMENT','REVIEW'].map((l,i,arr)=>({label:l, arrow:i<arr.length-1?'→':'',
+        border:l==='CHALLENGE'?'rgba(216,163,95,.5)':'rgba(142,196,214,.35)', color:l==='CHALLENGE'?'#d8a35f':'#8ec4d6', bg:'rgba(15,18,24,.6)'})),
+      patternFields:[
+        {tag:'PROBLEM',accent:'#8ec4d6',body:'Agents produce plausible code immediately, which makes it tempting to skip thinking. Unchallenged plans embed wrong assumptions that surface as expensive rework.'},
+        {tag:'WORKFLOW',accent:'#8ec4d6',body:'A research agent surveys the territory. A planning pass produces a stepwise plan. A separate agent — or the same one, adversarially prompted — attacks the plan. Only a surviving plan reaches implementation. A cold reviewer reads the final diff.'},
+        {tag:'HUMAN RESPONSIBILITY',accent:'#d8a35f',body:'Frame the problem, judge the challenge round, arbitrate disagreements, approve the plan, and own the merge. The human is the constant across every stage.'},
+        {tag:'AGENT RESPONSIBILITY',accent:'#8ec4d6',body:'Research breadth, plan drafting, adversarial critique, implementation within scope, and an independent cold-context review.'},
+        {tag:'VALIDATION',accent:'#8ec4d6',body:'The challenge round is validation of the plan; tests and independent review validate the code. Nothing merges on the implementer\'s word alone.'},
+        {tag:'RISKS',accent:'#d8a35f',body:'Ceremony on trivial tasks; challenge rounds that degrade into agreement if the critic shares the planner\'s context; humans rubber-stamping surviving plans.'},
+        {tag:'WHEN NOT TO USE',accent:'#d8a35f',body:'Small, reversible, well-understood changes. A one-line fix does not need a five-stage pipeline — that is what maintenance patterns are for.'}],
+      patterns:[
+        {num:'02',name:'Architect / Builder separation',problem:'One agent designing and implementing defends its own design. Splitting the roles keeps structure honest.',notWhen:'The structure is already fixed and the work is filling in a known shape.'},
+        {num:'03',name:'Independent code-review agent',problem:'A reviewer with no memory of the implementation reads the diff cold and reports findings before any human review.',notWhen:'Generated throwaway code that will never reach production.'},
+        {num:'04',name:'Test-first agent loop',problem:'Tests written and approved before implementation give the agent an objective target and the human a verification anchor.',notWhen:'Exploratory work where the desired behaviour is still being discovered.'},
+        {num:'05',name:'Bug reproduction before repair',problem:'No fix is accepted until the failure is demonstrated, then demonstrated fixed. Kills "it should work now".',notWhen:'Truly non-deterministic failures — then the pattern shifts to instrumentation first.'},
+        {num:'06',name:'Documentation as executable context',problem:'Docs written so a fresh agent session can act on them — onboarding material that is tested, not assumed.',notWhen:'Fast-moving prototypes where docs would immediately rot.'},
+        {num:'07',name:'Repository onboarding',problem:'A structured first session that maps the codebase, conventions and coupling before any agent is allowed to change it.',notWhen:'Repositories small enough to fit in a single context window.'},
+        {num:'08',name:'Context compression & handover',problem:'Long tasks are split across sessions with deliberate handover documents, because context loss is silent and cumulative.',notWhen:'Tasks that comfortably finish inside one focused session.'}],
+      continuum:[
+        {label:'MANUAL',color:'#7d7a72',bg:'transparent',body:'Done by hand. Correct default for anything done fewer than three times.'},
+        {label:'ASSISTED',color:'#a39f95',bg:'rgba(142,196,214,.03)',body:'A human drives; tooling or an agent accelerates the boring middle.'},
+        {label:'SCRIPTED',color:'#8ec4d6',bg:'rgba(142,196,214,.06)',body:'Deterministic, versioned, reviewable. The workhorse tier — most tasks should stop here.'},
+        {label:'AGENT-OPERATED',color:'#8ec4d6',bg:'rgba(142,196,214,.09)',body:'An agent executes a procedure that occasionally needs judgement mid-run.'},
+        {label:'CONDITIONALLY AUTONOMOUS',color:'#d8a35f',bg:'rgba(216,163,95,.07)',body:'Runs unattended within hard limits, with escalation rules and a kill switch. Earned, never assumed.'}],
+      automations:[
+        {name:'Repository analysis',tier:'AGENT-OPERATED',tierColor:'#8ec4d6',body:'Maps structure, conventions and coupling into an onboarding brief for humans and agent sessions alike.'},
+        {name:'Environment validation',tier:'SCRIPTED',tierColor:'#8ec4d6',body:'One command that proves a development environment is actually complete before work begins.'},
+        {name:'Test orchestration',tier:'SCRIPTED',tierColor:'#8ec4d6',body:'Selects and runs the right test subset per change, with full runs gated to merges.'},
+        {name:'Deployment checks',tier:'SCRIPTED',tierColor:'#8ec4d6',body:'Pre-flight and post-deploy verification. Deterministic on purpose — no judgement wanted here.'},
+        {name:'Dependency monitoring',tier:'AGENT-OPERATED',tierColor:'#8ec4d6',body:'Watches updates and advisories, drafts upgrade branches, and files the evidence for a human decision.'},
+        {name:'Documentation generation',tier:'AGENT-OPERATED',tierColor:'#8ec4d6',body:'Keeps executable context current from code and commit history, sampled by a human.'},
+        {name:'Visual regression',tier:'SCRIPTED',tierColor:'#8ec4d6',body:'Screenshot diffs on key flows. Cheap, dumb, and catches what unit tests structurally cannot.'},
+        {name:'Issue triage',tier:'AGENT-OPERATED',tierColor:'#8ec4d6',body:'Clusters, deduplicates and enriches incoming issues; priority remains a human call.'},
+        {name:'Agent handovers',tier:'AGENT-OPERATED',tierColor:'#8ec4d6',body:'Generates compressed context documents when a task must cross session boundaries.'},
+        {name:'Operational reporting',tier:'SCRIPTED',tierColor:'#8ec4d6',body:'Weekly platform health summaries assembled from logs and metrics. A cron job, not an agent.'}],
+      roles:this.rolesData().map((r,i)=>({label:r.l, select:()=>this.setState({role:i}),
+        bg:i===S.role?'rgba(142,196,214,.12)':'rgba(15,18,24,.6)', border:i===S.role?'rgba(142,196,214,.55)':'rgba(233,229,220,.12)', color:i===S.role?'#b7dde9':'#a39f95'})),
+      roleName:role.n, roleBody:role.b, roleDiscipline:role.d,
+      calcSliders:sliderDefs.map((l,i)=>({label:l, value:S.sliders[i], valueLabel:levels[S.sliders[i]],
+        set:e=>{ const v=[...this.state.sliders]; v[i]=+e.target.value; this.setState({sliders:v}); }})),
+      calcTitle:rec.title, calcLines:rec.lines.map(t=>({text:t})),
+      labItems:[
+        {status:'TESTING',statusColor:'#8ec4d6',dot:'#8ec4d6',opacity:1,strike:'none',name:'Cold-context review harness',body:'Tooling that spawns a reviewer agent with zero implementation context and diffs its findings against human review. Measuring where independence actually pays.'},
+        {status:'PROTOTYPING',statusColor:'#8ec4d6',dot:'#8ec4d6',opacity:1,strike:'none',name:'Handover compressor',body:'Turns a long agent session into a minimal context document a fresh session can resume from. The hard part is deciding what to forget.'},
+        {status:'INVESTIGATING',statusColor:'#a39f95',dot:'#a39f95',opacity:1,strike:'none',name:'Answer-engine visibility',body:'How programmatic local pages surface in AI answer engines versus classic search. Early, mostly measurement design.'},
+        {status:'PAUSED',statusColor:'#d8a35f',dot:'#d8a35f',opacity:.85,strike:'none',name:'Visual regression via browser agent',body:'An agent operating a browser for regression checks. Paused: a screenshot-diff script does 90% of it at 5% of the cost.'},
+        {status:'DISCARDED',statusColor:'#7d7a72',dot:'#5d5a53',opacity:.6,strike:'line-through',name:'Fully autonomous dependency upgrades',body:'Discarded after two near-misses. Upgrades that pass tests can still change behaviour tests never covered. Now agent-drafted, human-merged.'},
+        {status:'SHIPPED',statusColor:'#8ec4d6',dot:'#8ec4d6',opacity:1,strike:'none',name:'Environment doctor',body:'A single script that validates a full local setup and prints exactly what is missing. Boring, and used every week.'}],
+      noteCats:['AGENTIC ENGINEERING','SOFTWARE ARCHITECTURE','AUTOMATION','BUILDING PRODUCTS','AI ECONOMICS','FAILURE ANALYSIS','PRACTICAL EXPERIMENTS','CAREER & CRAFT'],
+      notes:[
+        {title:'The cheapest agent is a bash script',cat:'AI ECONOMICS',origin:'AUTOMATION',go:nav('automation'),body:'Where the automation continuum actually pays: replacing an agent loop with forty lines of deterministic shell, and how to spot the tasks where that is true.'},
+        {title:'What a challenge round catches',cat:'AGENTIC ENGINEERING',origin:'WORKFLOWS',go:nav('workflows'),body:'A month of logging every plan that failed adversarial review: wrong assumptions about data shape dominate, hallucinated APIs are rarer than expected.'},
+        {title:'Programmatic pages without the spam',cat:'BUILDING PRODUCTS',origin:'FOUNDMYPRO',go:nav('systems'),body:'The quality thresholds that keep generated local pages genuinely useful, and what happened to the ones that missed the bar.'},
+        {title:'Two near-misses with autonomous upgrades',cat:'FAILURE ANALYSIS',origin:'LAB',go:nav('lab'),body:'The dependency-upgrade experiment that got discarded: what the tests missed, and why "green" was not the same as "safe".'},
+        {title:'Why Sentinel is not launched',cat:'BUILDING PRODUCTS',origin:'SENTINEL',go:nav('systems'),body:'Liability, trust and the discipline of delaying a product whose failure modes land on someone else\'s production system.'},
+        {title:'From service floor to system design',cat:'CAREER & CRAFT',origin:'ABOUT',go:nav('about'),body:'What hospitality operations teach about software: standards are behaviour under pressure, and every system is judged at its worst moment.'}],
+      contactRoutes:[
+        {name:'Engineering roles',body:'Senior engineering positions where agentic workflows and product thinking matter.',href:'mailto:hello@eduardoneto.com?subject=Engineering%20role'},
+        {name:'Product collaboration',body:'Building something real and want a systems-minded partner.',href:'mailto:hello@eduardoneto.com?subject=Product%20collaboration'},
+        {name:'Technical discussion',body:'Agentic SDLC, workflow design, automation economics — disagreement welcome.',href:'mailto:hello@eduardoneto.com?subject=Technical%20discussion'},
+        {name:'Project feedback',body:'You used FoundMyPro or read a field note and something was wrong or missing.',href:'mailto:hello@eduardoneto.com?subject=Project%20feedback'},
+        {name:'Speaking or writing',body:'Talks or articles on agentic development, told from practice rather than hype.',href:'mailto:hello@eduardoneto.com?subject=Speaking%20or%20writing'}]
+    };
+  }
+}
+</script>
+</body>
+</html>

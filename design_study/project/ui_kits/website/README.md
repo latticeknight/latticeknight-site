@@ -1,0 +1,2 @@
+# Website UI kit — eduardoneto.com
+Static recreation of the Home screen ("The Lattice") from the interactive prototype (Latticeknight.dc.html is the source of truth — a live canvas graph sits behind content there; this static kit uses assets/lattice-texture.png as the backdrop). Composes the core component styles: Kicker, StatusDot, Button, Panel.
