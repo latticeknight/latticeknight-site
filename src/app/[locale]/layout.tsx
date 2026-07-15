@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { SiteShell } from "@/components/site-shell";
 import { getDictionary } from "@/content/get-dictionary";
-import { SITE_NAME, SITE_URL } from "@/lib/metadata";
+import { SITE_NAME, SITE_TITLE_SUFFIX, SITE_URL } from "@/lib/metadata";
 import { isLocale, locales } from "@/lib/site";
 import "../globals.css";
 
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
     default: SITE_NAME,
-    template: "%s · Eduardo Neto",
+    template: `%s ${SITE_TITLE_SUFFIX}`,
   },
   description:
     "Systems, products and practical methods for reliable software engineering with AI agents.",

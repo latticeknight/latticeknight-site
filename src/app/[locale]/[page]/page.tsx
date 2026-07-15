@@ -15,6 +15,7 @@ import {
   alternateOpenGraphLocale,
   openGraphLocale,
   SITE_NAME,
+  SITE_TITLE_SUFFIX,
 } from "@/lib/metadata";
 import {
   isLocale,
@@ -41,7 +42,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   if (!slug || slug === "home") return {};
   const dictionary = await getDictionary(locale);
   const copy = dictionary[slug] as { title?: string; intro?: string };
-  const socialTitle = copy.title ? `${copy.title} · Eduardo Neto` : SITE_NAME;
+  const socialTitle = copy.title ? `${copy.title} ${SITE_TITLE_SUFFIX}` : SITE_NAME;
   return {
     title: copy.title,
     description: copy.intro,
