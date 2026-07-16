@@ -59,6 +59,22 @@ export default async function LocaleLayout({
       data-scroll-behavior="smooth"
       lang={locale === "en" ? "en-GB" : "pt-PT"}
     >
+      <head>
+        <noscript>
+          <style>{`
+            .site-shell--intro-pending .site-intro-v2-background,
+            .site-shell--intro-pending .site-intro-v2,
+            .site-shell--intro-pending .lattice-canvas { display: none !important; }
+            .site-shell--intro-pending .site-header,
+            .site-shell--intro-pending .page-transition,
+            .site-shell--intro-pending .site-footer {
+              opacity: 1 !important;
+              pointer-events: auto !important;
+            }
+            .site-shell--intro-pending .page-transition { animation: none !important; }
+          `}</style>
+        </noscript>
+      </head>
       <body>
         <SiteShell dictionary={dictionary} locale={locale}>
           {children}
