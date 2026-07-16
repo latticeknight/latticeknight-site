@@ -36,7 +36,9 @@ type VideoGeometry = {
 
 function measureVideoGeometry(element: HTMLElement): VideoGeometry {
   const origin = element.getBoundingClientRect();
-  const targetWidth = Math.min(window.innerWidth * 0.88, 900, window.innerHeight * 0.72 * (16 / 9));
+  const viewportWidth = document.documentElement.clientWidth;
+  const viewportHeight = document.documentElement.clientHeight;
+  const targetWidth = Math.min(viewportWidth * 0.88, 900, viewportHeight * 0.72 * (16 / 9));
   const targetHeight = targetWidth * (9 / 16);
 
   return {
@@ -45,8 +47,8 @@ function measureVideoGeometry(element: HTMLElement): VideoGeometry {
     originTop: origin.top,
     originWidth: origin.width,
     targetHeight,
-    targetLeft: (window.innerWidth - targetWidth) / 2,
-    targetTop: (window.innerHeight - targetHeight) / 2,
+    targetLeft: (viewportWidth - targetWidth) / 2,
+    targetTop: (viewportHeight - targetHeight) / 2,
     targetWidth,
   };
 }

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Mo
 import { LatticeCanvas } from "@/components/lattice-canvas";
 import { LatticeIntro, type LatticeIntroStage } from "@/components/lattice-intro";
 import { MapGraph } from "@/components/map-graph";
+import { INTRO_SEEN_KEY } from "@/lib/intro-decision";
 import { hrefFor, pageSlugs, slugFromPathname, type Locale, type PageSlug, type SiteDictionary } from "@/lib/site";
 
 const subscribeToHydration = () => () => undefined;
@@ -64,7 +65,7 @@ export function SiteShell({
   useEffect(() => {
     if (current !== "home" || introStage !== "complete") return;
     try {
-      window.sessionStorage.setItem("lk-intro-v2-seen", "1");
+      window.sessionStorage.setItem(INTRO_SEEN_KEY, "1");
     } catch {
       // Session storage is optional; the site remains usable without it.
     }

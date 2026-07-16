@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
+import { INTRO_SEEN_KEY, introWillPlay } from "@/lib/intro-decision";
 import { pageSlugs, type PageSlug } from "@/lib/site";
 
 type NodePoint = {
@@ -604,7 +605,7 @@ export function LatticeCanvas({
 
     const markIntroSeen = () => {
       try {
-        window.sessionStorage.setItem("lk-intro-v2-seen", "1");
+        window.sessionStorage.setItem(INTRO_SEEN_KEY, "1");
       } catch {
         // The intro remains usable when storage is unavailable.
       }
@@ -727,17 +728,7 @@ export function LatticeCanvas({
     engine.layout(true);
     engineRef.current = engine;
 
-    let seen = false;
-    try {
-      seen = window.sessionStorage.getItem("lk-intro-v2-seen") === "1";
-    } catch {
-      seen = false;
-    }
-    const introPreference = new URLSearchParams(window.location.search).get("intro");
-    const forceReplay = introPreference === "replay";
-    const introOff = introPreference === "off";
-    const shouldPlayIntro =
-      initialIntroEnabledRef.current && !engine.reduced && !introOff && (forceReplay || !seen);
+    const shouldPlayIntro = initialIntroEnabledRef.current && introWillPlay();
 
     if (shouldPlayIntro) startIntro();
     else {
