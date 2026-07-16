@@ -728,7 +728,8 @@ export function LatticeCanvas({
     engine.layout(true);
     engineRef.current = engine;
 
-    const shouldPlayIntro = initialIntroEnabledRef.current && introWillPlay();
+    const shouldPlayIntro =
+      initialIntroEnabledRef.current && !engine.reduced && introWillPlay();
 
     if (shouldPlayIntro) startIntro();
     else {
