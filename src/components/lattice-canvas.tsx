@@ -615,7 +615,6 @@ export function LatticeCanvas({
       introActive = false;
       introElapsed = introTimings[7] ?? 5.3;
       markIntroSeen();
-      engine.active = "home";
       engine.layout(false);
       callbacksRef.current.onIntroComplete();
     };
@@ -625,7 +624,6 @@ export function LatticeCanvas({
       introActive = false;
       introElapsed = introTimings[7] ?? 5.3;
       markIntroSeen();
-      engine.active = "home";
       engine.layout(true);
       engine.draw();
       callbacksRef.current.onIntroComplete();

@@ -66,9 +66,10 @@ function geometryStyle(geometry: VideoGeometry): CSSProperties {
   } as CSSProperties;
 }
 
-function playVideo(video: HTMLVideoElement) {
-  void video.play().catch(() => {
-    // Removing or replacing a video can abort an in-flight play request.
+function playVideo(video: HTMLVideoElement, onFailure?: () => void) {
+  void video.play().catch((error: unknown) => {
+    if (error instanceof DOMException && error.name === "AbortError") return;
+    onFailure?.();
   });
 }
 
@@ -147,6 +148,7 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
     clearCollapseTimer();
     clearLoadingTimer();
     playbackStartedRef.current = false;
+    setInlinePlaying(false);
     setGeometry(measureVideoGeometry(triggerRef.current));
     changeOverlayStage("loading");
     loadingTimerRef.current = window.setTimeout(resetExperience, 10_000);
@@ -160,7 +162,7 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
     playbackStartedRef.current = true;
     video.loop = false;
     video.currentTime = 0;
-    playVideo(video);
+    playVideo(video, resetExperience);
     if (expandFrameRef.current) window.cancelAnimationFrame(expandFrameRef.current);
     expandFrameRef.current = window.requestAnimationFrame(() => {
       expandFrameRef.current = null;
@@ -216,7 +218,12 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
   }, [beginCollapse, overlayActive]);
 
   useEffect(() => {
-    if (overlayStage === "expanded") dialogRef.current?.focus({ preventScroll: true });
+    if (overlayStage === "loading" || overlayStage === "expanded") {
+      const dialog = dialogRef.current;
+      if (dialog && !dialog.contains(document.activeElement)) {
+        dialog.focus({ preventScroll: true });
+      }
+    }
     if (overlayStage === "idle" && restoreFocusRef.current) {
       triggerRef.current?.focus({ preventScroll: true });
       restoreFocusRef.current = false;

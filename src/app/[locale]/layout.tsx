@@ -59,6 +59,7 @@ export default async function LocaleLayout({
       className={`${archivo.variable} ${ibmPlexMono.variable}`}
       data-scroll-behavior="smooth"
       lang={locale === "en" ? "en-GB" : "pt-PT"}
+      suppressHydrationWarning
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: introDecisionScript }} />
