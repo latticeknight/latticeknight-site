@@ -4,6 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { SiteDictionary } from "@/lib/site";
 
+/**
+ * The portrait-led intro this site shipped before `LatticeIntro` replaced it.
+ * Deliberately kept dormant and unreferenced rather than deleted, so the
+ * portrait-led direction stays recoverable; it is not dead code to prune.
+ * It still owns the `lk-intro-seen` session key and the `.site-intro` styles in
+ * `globals.css`, both of which are separate from the live intro's
+ * `lk-intro-v2-seen` key and `.site-intro-v2` styles.
+ */
 export function SiteIntro({ copy }: { copy: SiteDictionary["common"] }) {
   const [visible, setVisible] = useState(false);
   const [exiting, setExiting] = useState(false);
