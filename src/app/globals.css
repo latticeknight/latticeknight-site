@@ -705,16 +705,21 @@ button {
   transition-delay: 0s;
 }
 
-.site-shell--intro-pending,
+:root:not([data-lk-intro="off"]) .site-shell--intro-pending,
 .site-shell--intro-forming,
 .site-shell--intro-identity,
 .site-shell--intro-handoff {
   background: var(--bg-0);
 }
 
-.site-shell--intro-pending .site-header,
-.site-shell--intro-pending .page-transition,
-.site-shell--intro-pending .site-footer,
+:root[data-lk-intro="off"] .site-shell--intro-pending .site-intro-v2-background,
+:root[data-lk-intro="off"] .site-shell--intro-pending .site-intro-v2 {
+  display: none;
+}
+
+:root:not([data-lk-intro="off"]) .site-shell--intro-pending .site-header,
+:root:not([data-lk-intro="off"]) .site-shell--intro-pending .page-transition,
+:root:not([data-lk-intro="off"]) .site-shell--intro-pending .site-footer,
 .site-shell--intro-forming .site-header,
 .site-shell--intro-forming .page-transition,
 .site-shell--intro-forming .site-footer,
@@ -725,7 +730,7 @@ button {
   pointer-events: none;
 }
 
-.site-shell--intro-pending .page-transition,
+:root:not([data-lk-intro="off"]) .site-shell--intro-pending .page-transition,
 .site-shell--intro-forming .page-transition,
 .site-shell--intro-identity .page-transition {
   animation: none;

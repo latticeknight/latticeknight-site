@@ -19,6 +19,9 @@ export function LatticeIntro({
 
   useEffect(() => {
     dialogRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && stage !== "handoff") onSkip();
     };

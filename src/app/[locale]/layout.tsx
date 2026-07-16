@@ -60,6 +60,11 @@ export default async function LocaleLayout({
       lang={locale === "en" ? "en-GB" : "pt-PT"}
     >
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var p=new URLSearchParams(window.location.search).get("intro");var reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches;var seen=false;try{seen=window.sessionStorage.getItem("lk-intro-v2-seen")==="1"}catch(e){}var play=p!=="off"&&!reduced&&(p==="replay"||!seen);if(!play)document.documentElement.setAttribute("data-lk-intro","off")}catch(e){}})();`,
+          }}
+        />
         <noscript>
           <style>{`
             .site-shell--intro-pending .site-intro-v2-background,
