@@ -105,6 +105,7 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
   const loadingTimerRef = useRef<number | null>(null);
   const expandFrameRef = useRef<number | null>(null);
   const restoreFocusRef = useRef(false);
+  const frameTravelsRef = useRef(false);
   const overlayActive = overlayStage !== "idle";
 
   const changeOverlayStage = useCallback((stage: OverlayStage) => {
@@ -158,6 +159,7 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
         playVideo(video);
       }
       restoreFocusRef.current = restoreFocus;
+      frameTravelsRef.current = stage === "expanded";
       setInlinePlaying(canContinueInline);
       changeOverlayStage("collapsing");
     },
@@ -201,21 +203,24 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
     if (overlayStage !== "collapsing") return;
     const frame = frameRef.current;
     const dialog = dialogRef.current;
+    const frameTravels = frameTravelsRef.current;
+    const watched = frameTravels ? frame : dialog;
     const onTransitionEnd = (event: TransitionEvent) => {
-      if (event.target === frame) finishCollapse();
+      if (event.target !== watched) return;
+      if (!frameTravels && event.pseudoElement !== "::before") return;
+      finishCollapse();
     };
-    frame?.addEventListener("transitionend", onTransitionEnd);
-    const longest = Math.max(
-      frame ? longestTransitionMs(frame) : 0,
-      dialog ? longestTransitionMs(dialog, "::before") : 0,
-    );
+    watched?.addEventListener("transitionend", onTransitionEnd);
+    const duration = watched
+      ? longestTransitionMs(watched, frameTravels ? undefined : "::before")
+      : 0;
     clearCollapseTimer();
     collapseTimerRef.current = window.setTimeout(
       finishCollapse,
-      longest + COLLAPSE_FALLBACK_MARGIN_MS,
+      duration + COLLAPSE_FALLBACK_MARGIN_MS,
     );
     return () => {
-      frame?.removeEventListener("transitionend", onTransitionEnd);
+      watched?.removeEventListener("transitionend", onTransitionEnd);
       clearCollapseTimer();
     };
   }, [clearCollapseTimer, finishCollapse, overlayStage]);

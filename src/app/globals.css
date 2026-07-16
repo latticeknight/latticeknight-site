@@ -1786,7 +1786,6 @@ button {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 10px;
   width: 200px;
 }
 
@@ -1819,11 +1818,16 @@ button {
 }
 
 .portrait-media__error {
+  margin: 0;
   color: var(--amber);
   font-family: var(--font-mono), monospace;
   font-size: 9px;
   letter-spacing: 0.16em;
   line-height: 1.5;
+}
+
+.portrait-media__error:not(:empty) {
+  margin-top: 10px;
 }
 
 .portrait-media__cue {
