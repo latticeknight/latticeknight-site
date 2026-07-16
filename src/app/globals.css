@@ -1925,6 +1925,7 @@ button {
 
 .portrait-cinema__loading {
   position: fixed;
+  z-index: 101;
   bottom: 24px;
   left: 50%;
   color: var(--text-3);

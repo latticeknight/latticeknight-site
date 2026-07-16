@@ -161,9 +161,15 @@ export function LatticeCanvas({
 
   useEffect(() => {
     const canvasElement = canvasRef.current;
-    if (!canvasElement) return;
+    if (!canvasElement) {
+      callbacksRef.current.onIntroComplete();
+      return;
+    }
     const drawingContext = canvasElement.getContext("2d");
-    if (!drawingContext) return;
+    if (!drawingContext) {
+      callbacksRef.current.onIntroComplete();
+      return;
+    }
 
     let frame = 0;
     let pausedByOverlay = false;
@@ -614,7 +620,6 @@ export function LatticeCanvas({
     const finishIntro = () => {
       introActive = false;
       introElapsed = introTimings[7] ?? 5.3;
-      markIntroSeen();
       engine.layout(false);
       callbacksRef.current.onIntroComplete();
     };
@@ -623,7 +628,6 @@ export function LatticeCanvas({
       if (!introActive) return;
       introActive = false;
       introElapsed = introTimings[7] ?? 5.3;
-      markIntroSeen();
       engine.layout(true);
       engine.draw();
       callbacksRef.current.onIntroComplete();

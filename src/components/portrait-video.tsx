@@ -94,6 +94,7 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
   const [geometry, setGeometry] = useState<VideoGeometry | null>(null);
   const [inlinePlaying, setInlinePlaying] = useState(false);
   const [playbackFailed, setPlaybackFailed] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const overlayVideoRef = useRef<HTMLVideoElement>(null);
   const inlineVideoRef = useRef<HTMLVideoElement>(null);
@@ -107,6 +108,8 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
   const restoreFocusRef = useRef(false);
   const frameTravelsRef = useRef(false);
   const overlayActive = overlayStage !== "idle";
+
+  useEffect(() => setPortalReady(true), []);
 
   const changeOverlayStage = useCallback((stage: OverlayStage) => {
     overlayStageRef.current = stage;
@@ -323,9 +326,6 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
           src="/assets/hero-lattice-v1.mp4"
         />
       </div>
-      <span aria-live="polite" className="portrait-cinema__loading" role="status">
-        {overlayStage === "loading" ? copy.loadingPortraitVideo : ""}
-      </span>
       <button
         className="portrait-cinema__close"
         onClick={() => beginCollapse(true)}
@@ -353,6 +353,7 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
             className="portrait-media__asset"
             loop
             muted
+            onError={failExperience}
             playsInline
             poster="/assets/portrait.png"
             ref={inlineVideoRef}
@@ -376,7 +377,17 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
       <p aria-live="polite" className="portrait-media__error" role="status">
         {playbackFailed ? copy.errorPortraitVideo : ""}
       </p>
-      {overlay ? createPortal(overlay, document.body) : null}
+      {portalReady
+        ? createPortal(
+            <>
+              <span aria-live="polite" className="portrait-cinema__loading" role="status">
+                {overlayStage === "loading" ? copy.loadingPortraitVideo : ""}
+              </span>
+              {overlay}
+            </>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
