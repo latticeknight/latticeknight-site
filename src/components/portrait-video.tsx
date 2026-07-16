@@ -7,6 +7,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
 } from "react";
@@ -23,6 +24,10 @@ type PortraitVideoCopy = {
 };
 
 type OverlayStage = "idle" | "loading" | "expanded" | "collapsing";
+
+const subscribeToNothing = () => () => {};
+const getPortalReady = () => true;
+const getPortalReadyOnServer = () => false;
 
 type VideoGeometry = {
   originHeight: number;
@@ -94,7 +99,11 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
   const [geometry, setGeometry] = useState<VideoGeometry | null>(null);
   const [inlinePlaying, setInlinePlaying] = useState(false);
   const [playbackFailed, setPlaybackFailed] = useState(false);
-  const [portalReady, setPortalReady] = useState(false);
+  const portalReady = useSyncExternalStore(
+    subscribeToNothing,
+    getPortalReady,
+    getPortalReadyOnServer,
+  );
   const triggerRef = useRef<HTMLButtonElement>(null);
   const overlayVideoRef = useRef<HTMLVideoElement>(null);
   const inlineVideoRef = useRef<HTMLVideoElement>(null);
@@ -108,8 +117,6 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
   const restoreFocusRef = useRef(false);
   const frameTravelsRef = useRef(false);
   const overlayActive = overlayStage !== "idle";
-
-  useEffect(() => setPortalReady(true), []);
 
   const changeOverlayStage = useCallback((stage: OverlayStage) => {
     overlayStageRef.current = stage;
