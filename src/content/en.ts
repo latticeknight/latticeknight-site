@@ -368,6 +368,7 @@ export const en: SiteDictionary = {
     replayPortraitVideo: "Replay Eduardo's introduction video",
     closePortraitVideo: "Close video",
     loadingPortraitVideo: "Loading video",
+    errorPortraitVideo: "VIDEO UNAVAILABLE. TRY AGAIN.",
     portraitVideoLabel: "Eduardo Neto introduction video",
     portraitVideoHint: "PLAY 00:08",
   },

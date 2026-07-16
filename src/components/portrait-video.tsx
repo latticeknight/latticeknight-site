@@ -17,6 +17,7 @@ type PortraitVideoCopy = {
   replayPortraitVideo: string;
   closePortraitVideo: string;
   loadingPortraitVideo: string;
+  errorPortraitVideo: string;
   portraitVideoLabel: string;
   portraitVideoHint: string;
 };
@@ -73,14 +74,31 @@ function playVideo(video: HTMLVideoElement, onFailure?: () => void) {
   });
 }
 
+const COLLAPSE_FALLBACK_MARGIN_MS = 250;
+
+function longestTransitionMs(element: Element, pseudoElement?: string) {
+  const durations = window
+    .getComputedStyle(element, pseudoElement)
+    .transitionDuration.split(",")
+    .map((part) => {
+      const trimmed = part.trim();
+      const numeric = Number.parseFloat(trimmed);
+      if (!Number.isFinite(numeric)) return 0;
+      return trimmed.endsWith("ms") ? numeric : numeric * 1000;
+    });
+  return Math.max(0, ...durations);
+}
+
 export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
   const [overlayStage, setOverlayStage] = useState<OverlayStage>("idle");
   const [geometry, setGeometry] = useState<VideoGeometry | null>(null);
   const [inlinePlaying, setInlinePlaying] = useState(false);
+  const [playbackFailed, setPlaybackFailed] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const overlayVideoRef = useRef<HTMLVideoElement>(null);
   const inlineVideoRef = useRef<HTMLVideoElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const overlayStageRef = useRef<OverlayStage>("idle");
   const playbackStartedRef = useRef(false);
   const collapseTimerRef = useRef<number | null>(null);
@@ -120,6 +138,11 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
     finishCollapse();
   }, [finishCollapse]);
 
+  const failExperience = useCallback(() => {
+    setPlaybackFailed(true);
+    resetExperience();
+  }, [resetExperience]);
+
   const beginCollapse = useCallback(
     (restoreFocus: boolean) => {
       const stage = overlayStageRef.current;
@@ -137,10 +160,8 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
       restoreFocusRef.current = restoreFocus;
       setInlinePlaying(canContinueInline);
       changeOverlayStage("collapsing");
-      clearCollapseTimer();
-      collapseTimerRef.current = window.setTimeout(finishCollapse, 950);
     },
-    [changeOverlayStage, clearCollapseTimer, clearLoadingTimer, finishCollapse],
+    [changeOverlayStage, clearLoadingTimer],
   );
 
   const startExperience = () => {
@@ -148,10 +169,11 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
     clearCollapseTimer();
     clearLoadingTimer();
     playbackStartedRef.current = false;
+    setPlaybackFailed(false);
     setInlinePlaying(false);
     setGeometry(measureVideoGeometry(triggerRef.current));
     changeOverlayStage("loading");
-    loadingTimerRef.current = window.setTimeout(resetExperience, 10_000);
+    loadingTimerRef.current = window.setTimeout(failExperience, 10_000);
   };
 
   const handleVideoReady = () => {
@@ -162,7 +184,7 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
     playbackStartedRef.current = true;
     video.loop = false;
     video.currentTime = 0;
-    playVideo(video, resetExperience);
+    playVideo(video, failExperience);
     if (expandFrameRef.current) window.cancelAnimationFrame(expandFrameRef.current);
     expandFrameRef.current = window.requestAnimationFrame(() => {
       expandFrameRef.current = null;
@@ -172,18 +194,31 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
 
   const handleFirstPassEnded = () => {
     if (overlayStageRef.current !== "expanded") return;
-    const video = overlayVideoRef.current;
-    if (video) {
-      video.loop = true;
-      video.currentTime = 0;
-      playVideo(video);
-    }
-    restoreFocusRef.current = true;
-    setInlinePlaying(true);
-    changeOverlayStage("collapsing");
-    clearCollapseTimer();
-    collapseTimerRef.current = window.setTimeout(finishCollapse, 950);
+    beginCollapse(true);
   };
+
+  useEffect(() => {
+    if (overlayStage !== "collapsing") return;
+    const frame = frameRef.current;
+    const dialog = dialogRef.current;
+    const onTransitionEnd = (event: TransitionEvent) => {
+      if (event.target === frame) finishCollapse();
+    };
+    frame?.addEventListener("transitionend", onTransitionEnd);
+    const longest = Math.max(
+      frame ? longestTransitionMs(frame) : 0,
+      dialog ? longestTransitionMs(dialog, "::before") : 0,
+    );
+    clearCollapseTimer();
+    collapseTimerRef.current = window.setTimeout(
+      finishCollapse,
+      longest + COLLAPSE_FALLBACK_MARGIN_MS,
+    );
+    return () => {
+      frame?.removeEventListener("transitionend", onTransitionEnd);
+      clearCollapseTimer();
+    };
+  }, [clearCollapseTimer, finishCollapse, overlayStage]);
 
   useEffect(() => {
     if (!overlayActive) return;
@@ -269,13 +304,13 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
       role="dialog"
       tabIndex={-1}
     >
-      <div className="portrait-cinema__frame" style={geometryStyle(geometry)}>
+      <div className="portrait-cinema__frame" ref={frameRef} style={geometryStyle(geometry)}>
         <video
           aria-hidden="true"
           muted
           onCanPlay={handleVideoReady}
           onEnded={handleFirstPassEnded}
-          onError={resetExperience}
+          onError={failExperience}
           playsInline
           poster="/assets/portrait.png"
           preload="auto"
@@ -297,7 +332,7 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
   ) : null;
 
   return (
-    <>
+    <div className="portrait-block">
       <button
         aria-label={inlinePlaying ? copy.replayPortraitVideo : copy.playPortraitVideo}
         className="portrait-media"
@@ -333,7 +368,10 @@ export function PortraitVideo({ copy }: { copy: PortraitVideoCopy }) {
           <span>{copy.portraitVideoHint}</span>
         </span>
       </button>
+      <p aria-live="polite" className="portrait-media__error" role="status">
+        {playbackFailed ? copy.errorPortraitVideo : ""}
+      </p>
       {overlay ? createPortal(overlay, document.body) : null}
-    </>
+    </div>
   );
 }

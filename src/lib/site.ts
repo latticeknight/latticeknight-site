@@ -218,6 +218,7 @@ export type SiteDictionary = {
     replayPortraitVideo: string;
     closePortraitVideo: string;
     loadingPortraitVideo: string;
+    errorPortraitVideo: string;
     portraitVideoLabel: string;
     portraitVideoHint: string;
   };

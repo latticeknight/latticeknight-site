@@ -1782,6 +1782,14 @@ button {
   gap: 40px;
 }
 
+.portrait-block {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 200px;
+}
+
 .portrait-media {
   position: relative;
   flex: none;
@@ -1808,6 +1816,14 @@ button {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.portrait-media__error {
+  color: var(--amber);
+  font-family: var(--font-mono), monospace;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  line-height: 1.5;
 }
 
 .portrait-media__cue {
@@ -2259,6 +2275,10 @@ button {
 
   .about-layout {
     gap: 28px;
+  }
+
+  .portrait-block {
+    width: 160px;
   }
 
   .portrait-media {
