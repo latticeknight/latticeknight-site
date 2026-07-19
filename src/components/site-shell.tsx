@@ -2,12 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent } from "react";
 
 import { LatticeCanvas } from "@/components/lattice-canvas";
+import { LatticeIntro, type LatticeIntroStage } from "@/components/lattice-intro";
 import { MapGraph } from "@/components/map-graph";
-import { SiteIntro } from "@/components/site-intro";
+import { INTRO_SEEN_KEY } from "@/lib/intro-decision";
 import { hrefFor, pageSlugs, slugFromPathname, type Locale, type PageSlug, type SiteDictionary } from "@/lib/site";
+
+const subscribeToHydration = () => () => undefined;
+const getClientHydrationSnapshot = () => true;
+const getServerHydrationSnapshot = () => false;
 
 function LanguageSwitch({ locale, current, label }: { locale: Locale; current: PageSlug; label: string }) {
   return (
@@ -34,10 +39,46 @@ export function SiteShell({
   const [mapOpen, setMapOpen] = useState(false);
   const [routePending, setRoutePending] = useState(false);
   const [visited, setVisited] = useState<PageSlug[]>(["home"]);
+  const hydrated = useSyncExternalStore(
+    subscribeToHydration,
+    getClientHydrationSnapshot,
+    getServerHydrationSnapshot,
+  );
+  const [introStage, setIntroStage] = useState<LatticeIntroStage>(current === "home" ? "pending" : "complete");
+  const [introSkipKey, setIntroSkipKey] = useState(0);
   const mapDialogRef = useRef<HTMLDialogElement>(null);
   const pendingPathRef = useRef<string | null>(null);
   const pendingStartedAtRef = useRef(0);
   const common = dictionary.common;
+  const introVisible = current === "home" && introStage !== "complete";
+  const introBlocksInterface = hydrated && introVisible && introStage !== "handoff";
+
+  const handleIntroStart = useCallback(() => setIntroStage("forming"), []);
+  const handleIntroIdentity = useCallback(() => setIntroStage("identity"), []);
+  const handleIntroHandoff = useCallback(() => setIntroStage("handoff"), []);
+  const handleIntroComplete = useCallback(() => setIntroStage("complete"), []);
+  const handleIntroSkip = useCallback(() => {
+    setIntroStage("complete");
+    setIntroSkipKey((value) => value + 1);
+  }, []);
+
+  useEffect(() => {
+    if (current !== "home" || introStage !== "complete") return;
+    try {
+      window.sessionStorage.setItem(INTRO_SEEN_KEY, "1");
+    } catch {
+      // Session storage is optional; the site remains usable without it.
+    }
+  }, [current, introStage]);
+
+  useEffect(() => {
+    if (!introBlocksInterface) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [introBlocksInterface]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
@@ -144,8 +185,13 @@ export function SiteShell({
   }
 
   return (
-    <div className="site-shell" onClickCapture={handleNavigationIntent}>
-      <a className="skip-link" href="#main-content">{common.skipContent}</a>
+    <div
+      className={`site-shell${introVisible ? ` site-shell--intro-${introStage}` : ""}`}
+      onClickCapture={handleNavigationIntent}
+    >
+      <a className="skip-link" href="#main-content" tabIndex={introBlocksInterface ? -1 : undefined}>
+        {common.skipContent}
+      </a>
       <div
         aria-hidden="true"
         className={routePending ? "route-progress route-progress--active" : "route-progress"}
@@ -155,10 +201,20 @@ export function SiteShell({
       <span aria-live="polite" className="sr-only" role="status">
         {routePending ? common.loading : ""}
       </span>
-      <LatticeCanvas active={current} visited={visited} />
-      {current === "home" ? <SiteIntro copy={common} /> : null}
+      <LatticeCanvas
+        active={current}
+        introEnabled={current === "home"}
+        introSkipKey={introSkipKey}
+        labels={common.tags}
+        onIntroComplete={handleIntroComplete}
+        onIntroHandoff={handleIntroHandoff}
+        onIntroIdentity={handleIntroIdentity}
+        onIntroStart={handleIntroStart}
+        visited={visited}
+      />
+      {introVisible ? <LatticeIntro copy={common} onSkip={handleIntroSkip} stage={introStage} /> : null}
 
-      <header className="site-header">
+      <header aria-hidden={introBlocksInterface || undefined} className="site-header" inert={introBlocksInterface || undefined}>
         <Link className="brand" href={hrefFor(locale, "home")} onClick={closeOverlays}>
           <span>Eduardo Neto</span>
           <span>latticeknight</span>
@@ -257,8 +313,19 @@ export function SiteShell({
         </dialog>
       ) : null}
 
-      <main aria-hidden={menuOpen || undefined} className="page-transition" id="main-content" inert={menuOpen || undefined}>{children}</main>
-      <footer aria-hidden={menuOpen || undefined} className="site-footer" inert={menuOpen || undefined}>
+      <main
+        aria-hidden={menuOpen || introBlocksInterface || undefined}
+        className="page-transition"
+        id="main-content"
+        inert={menuOpen || introBlocksInterface || undefined}
+      >
+        {children}
+      </main>
+      <footer
+        aria-hidden={menuOpen || introBlocksInterface || undefined}
+        className="site-footer"
+        inert={menuOpen || introBlocksInterface || undefined}
+      >
         <span>EDUARDO NETO · LATTICEKNIGHT</span>
         <span>
           <a href="https://github.com/latticeknight" target="_blank" rel="noreferrer">GITHUB</a>

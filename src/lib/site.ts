@@ -80,6 +80,7 @@ export type SiteDictionary = {
     footerSystem: string;
     footerExplored: string;
     introStatement: [string, string];
+    introV2Statement: string;
     enter: string;
     skipIntro: string;
   };
@@ -212,6 +213,14 @@ export type SiteDictionary = {
     title: string;
     paragraphs: string[];
     preference: string;
+    portraitAlt: string;
+    playPortraitVideo: string;
+    replayPortraitVideo: string;
+    closePortraitVideo: string;
+    loadingPortraitVideo: string;
+    errorPortraitVideo: string;
+    portraitVideoLabel: string;
+    portraitVideoHint: string;
   };
   contact: {
     kicker: string;

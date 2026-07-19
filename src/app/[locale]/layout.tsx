@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { SiteShell } from "@/components/site-shell";
 import { getDictionary } from "@/content/get-dictionary";
+import { introDecisionScript } from "@/lib/intro-decision";
 import { SITE_NAME, SITE_TITLE_SUFFIX, SITE_URL } from "@/lib/metadata";
 import { isLocale, locales } from "@/lib/site";
 import "../globals.css";
@@ -58,7 +59,25 @@ export default async function LocaleLayout({
       className={`${archivo.variable} ${ibmPlexMono.variable}`}
       data-scroll-behavior="smooth"
       lang={locale === "en" ? "en-GB" : "pt-PT"}
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: introDecisionScript }} />
+        <noscript>
+          <style>{`
+            .site-shell--intro-pending .site-intro-v2-background,
+            .site-shell--intro-pending .site-intro-v2,
+            .site-shell--intro-pending .lattice-canvas { display: none !important; }
+            .site-shell--intro-pending .site-header,
+            .site-shell--intro-pending .page-transition,
+            .site-shell--intro-pending .site-footer {
+              opacity: 1 !important;
+              pointer-events: auto !important;
+            }
+            .site-shell--intro-pending .page-transition { animation: none !important; }
+          `}</style>
+        </noscript>
+      </head>
       <body>
         <SiteShell dictionary={dictionary} locale={locale}>
           {children}

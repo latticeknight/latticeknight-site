@@ -29,8 +29,15 @@ The production application is a modular Next.js implementation rather than a dep
 Shared page components, typed content dictionaries, static locale routes, and a persistent application shell make the site straightforward to extend without duplicating each language or page.
 Per-locale metadata and dynamically generated OpenGraph share cards give every route a branded lattice preview when links are shared, in English UK or Portuguese Portugal.
 
-The interface includes an ambient canvas lattice, route-aware navigation, visit history, an interactive navigation lattice, interactive role guidance, and a conceptual workflow designer.
+The interface includes a cinematic lattice intro, an ambient canvas lattice, route-aware navigation, visit history, an interactive navigation lattice, interactive role guidance, and a conceptual workflow designer.
 These features support the central idea of the site: products, practices, experiments, and writing are parts of one connected engineering system.
+
+The homepage opens with the lattice forming out of darkness and handing off into the live ambient lattice.
+It plays once per browser session, can be skipped with the skip control or the Escape key, and is suppressed for visitors who prefer reduced motion.
+Append `?intro=replay` to the homepage URL to play it again in the same session, or `?intro=off` to skip it entirely.
+
+The About portrait is an opt-in surprise rather than autoplaying decoration.
+Activating it expands the portrait over a black backdrop, plays one eight-second pass, then collapses back into the portrait and keeps looping inline until you navigate away or refresh.
 
 ## Languages
 
@@ -76,7 +83,10 @@ No environment variables or external data services are required.
 - `src/components/pages` contains one modular page implementation per region.
 - `src/content` contains the English UK and Portuguese Portugal dictionaries.
 - `src/components/site-shell.tsx` owns persistent navigation, language switching, visit history, and the interactive lattice.
-- `src/components/lattice-canvas.tsx` owns the ambient connected graph.
+- `src/components/lattice-canvas.tsx` owns the ambient connected graph and the intro lattice animation it hands off from.
+- `src/components/lattice-intro.tsx` owns the intro overlay copy, skip control, and stage presentation.
+- `src/lib/intro-decision.ts` is the single place the play/off rule is evaluated, before first paint, for both the pre-hydration styles and the hydrated canvas.
+- `src/components/portrait-video.tsx` owns the opt-in About portrait video surface.
 - `public/assets` contains production copies of the supplied brand imagery.
 - `design_study` remains the unmodified Claude Design handoff and visual source of truth.
 

@@ -1,6 +1,5 @@
-import Image from "next/image";
-
 import { PageHeader } from "@/components/page-header";
+import { PortraitVideo } from "@/components/portrait-video";
 import { SocialLinks } from "@/components/social-links";
 import type { SiteDictionary } from "@/lib/site";
 
@@ -9,14 +8,7 @@ export function AboutPage({ copy }: { copy: SiteDictionary["about"] }) {
     <div className="page page--narrow">
       <PageHeader kicker={copy.kicker} title={copy.title} />
       <section className="about-layout">
-        <Image
-          alt="Eduardo Neto"
-          className="portrait"
-          height={200}
-          priority
-          src="/assets/portrait.png"
-          width={200}
-        />
+        <PortraitVideo copy={copy} />
         <div className="about-copy">
           {copy.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
           <p className="about-preference">{copy.preference}</p>
