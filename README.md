@@ -36,6 +36,7 @@ These features support the central idea of the site: products, practices, experi
 The homepage opens with the lattice forming out of darkness, then hands that exact graph off to the dim ambient background it keeps for the rest of the visit.
 It plays once per browser session, can be skipped with the skip control or the Escape key, and is suppressed for visitors who prefer reduced motion.
 Append `?intro=replay` to the homepage URL to play it again in the same session, or `?intro=off` to skip it entirely.
+Once handed off, the ambient graph drifts gently and lights the nodes and connections the pointer passes over, so it stays alive without competing with the page.
 
 Opening LATTICE slides the page content aside and brings that same scene forward as the navigator.
 Nodes are drawn toward the pointer and spring back when it leaves, dragging rotates the graph in three dimensions, and the region labels ride along as accessible route links that stay upright and readable.
