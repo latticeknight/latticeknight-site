@@ -46,6 +46,7 @@ export function SiteShell({
   const [introStage, setIntroStage] = useState<LatticeIntroStage>(current === "home" ? "pending" : "complete");
   const [introSkipKey, setIntroSkipKey] = useState(0);
   const mapTriggerRef = useRef<HTMLButtonElement>(null);
+  const mapFocusTargetRef = useRef<HTMLElement | null>(null);
   const restoreMapFocusRef = useRef(false);
   const pendingPathRef = useRef<string | null>(null);
   const pendingStartedAtRef = useRef(0);
@@ -125,7 +126,19 @@ export function SiteShell({
   }, [visited]);
 
   useEffect(() => {
-    const openMap = () => setMapOpen(true);
+    const openMap = (event: Event) => {
+      const requestedTarget = event instanceof CustomEvent
+        ? event.detail?.trigger
+        : null;
+      const activeElement = document.activeElement;
+      mapFocusTargetRef.current = requestedTarget instanceof HTMLElement
+        ? requestedTarget
+        : activeElement instanceof HTMLElement && activeElement !== document.body
+          ? activeElement
+          : mapTriggerRef.current;
+      setMenuOpen(false);
+      setMapOpen(true);
+    };
     window.addEventListener("lattice:open-map", openMap);
     return () => window.removeEventListener("lattice:open-map", openMap);
   }, []);
@@ -150,7 +163,11 @@ export function SiteShell({
 
   useEffect(() => {
     if (mapOpen || !restoreMapFocusRef.current) return;
-    mapTriggerRef.current?.focus({ preventScroll: true });
+    const focusTarget = mapFocusTargetRef.current?.isConnected
+      ? mapFocusTargetRef.current
+      : mapTriggerRef.current;
+    focusTarget?.focus({ preventScroll: true });
+    mapFocusTargetRef.current = null;
     restoreMapFocusRef.current = false;
   }, [mapOpen]);
 
@@ -162,6 +179,11 @@ export function SiteShell({
   function closeMapAndRestoreFocus() {
     restoreMapFocusRef.current = true;
     setMapOpen(false);
+  }
+
+  function cancelNavigationIntent() {
+    pendingPathRef.current = null;
+    setRoutePending(false);
   }
 
   function handleNavigationIntent(event: ReactMouseEvent<HTMLDivElement>) {
@@ -225,6 +247,7 @@ export function SiteShell({
         onIntroHandoff={handleIntroHandoff}
         onIntroIdentity={handleIntroIdentity}
         onIntroStart={handleIntroStart}
+        onNavigatorCancelNavigation={cancelNavigationIntent}
         onNavigatorClose={closeMapAndRestoreFocus}
         onNavigatorNavigate={closeOverlays}
         visited={visited}
@@ -253,7 +276,11 @@ export function SiteShell({
           aria-expanded={mapOpen}
           aria-haspopup="dialog"
           className="header-control"
-          onClick={() => { setMapOpen(true); setMenuOpen(false); }}
+          onClick={(event) => {
+            mapFocusTargetRef.current = event.currentTarget;
+            setMapOpen(true);
+            setMenuOpen(false);
+          }}
           ref={mapTriggerRef}
           type="button"
         >

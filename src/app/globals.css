@@ -783,7 +783,6 @@ button {
 }
 
 .site-shell--lattice-open .page-transition {
-  animation: none;
   transform: translate3d(-105vw, 0, 0) scale(0.975);
 }
 
@@ -795,7 +794,7 @@ button {
   position: relative;
   z-index: 10;
   min-height: calc(100vh - 78px);
-  animation: page-resolve 0.45s ease both;
+  animation: page-resolve 0.45s ease backwards;
   transition: opacity 0.45s ease, transform 0.45s ease;
 }
 
@@ -2212,8 +2211,8 @@ button {
 }
 
 @keyframes page-resolve {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { filter: opacity(0); translate: 0 10px; }
+  to { filter: opacity(1); translate: 0 0; }
 }
 
 @keyframes route-progress {

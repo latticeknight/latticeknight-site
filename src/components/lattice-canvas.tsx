@@ -68,6 +68,11 @@ type LabelMotion = {
   vy: number;
 };
 
+type LabelSize = {
+  halfWidth: number;
+  height: number;
+};
+
 type CameraState = {
   yaw: number;
   pitch: number;
@@ -116,6 +121,7 @@ type LatticeCanvasProps = {
   navigatorHint: string;
   closeLabel: string;
   onNavigatorClose: () => void;
+  onNavigatorCancelNavigation: () => void;
   onNavigatorNavigate: () => void;
   onIntroStart: () => void;
   onIntroIdentity: () => void;
@@ -193,6 +199,10 @@ function decayFactor(factor: number, step: number) {
   return Math.pow(factor, step);
 }
 
+function normalizeAngle(angle: number) {
+  return Math.atan2(Math.sin(angle), Math.cos(angle));
+}
+
 function smoothStep(value: number) {
   const time = clamp(value);
   return time * time * (3 - 2 * time);
@@ -255,6 +265,7 @@ export function LatticeCanvas({
   navigatorHint,
   closeLabel,
   onNavigatorClose,
+  onNavigatorCancelNavigation,
   onNavigatorNavigate,
   onIntroStart,
   onIntroIdentity,
@@ -265,7 +276,7 @@ export function LatticeCanvas({
   const engineRef = useRef<SceneEngine | null>(null);
   const linkRefs = useRef<Partial<Record<PageSlug, HTMLAnchorElement | null>>>({});
   const labelMotionRef = useRef<Partial<Record<PageSlug, LabelMotion>>>({});
-  const labelHalfWidthRef = useRef<Partial<Record<PageSlug, number>>>({});
+  const labelSizeRef = useRef<Partial<Record<PageSlug, LabelSize>>>({});
   const initialActiveRef = useRef(active);
   const initialVisitedRef = useRef(visited);
   const initialLabelsRef = useRef(labels);
@@ -288,7 +299,7 @@ export function LatticeCanvas({
 
   useEffect(() => {
     initialLabelsRef.current = labels;
-    labelHalfWidthRef.current = {};
+    labelSizeRef.current = {};
   }, [labels]);
 
   useEffect(() => {
@@ -485,24 +496,41 @@ export function LatticeCanvas({
       return target;
     };
 
-    const labelHalfWidth = (slug: PageSlug, link: HTMLAnchorElement) => {
-      const cached = labelHalfWidthRef.current[slug];
+    const labelSize = (slug: PageSlug, link: HTMLAnchorElement) => {
+      const cached = labelSizeRef.current[slug];
       if (cached) return cached;
-      const measured = link.offsetWidth;
-      if (measured <= 0) return 62;
-      labelHalfWidthRef.current[slug] = measured / 2;
-      return measured / 2;
+      const measured = {
+        halfWidth: Math.max(62, link.offsetWidth / 2),
+        height: Math.max(34, link.offsetHeight),
+      };
+      labelSizeRef.current[slug] = measured;
+      return measured;
     };
 
     const updateLabels = (step: number) => {
+      const states: Array<{
+        link: HTMLAnchorElement;
+        motion: LabelMotion;
+        labelScale: number;
+        halfWidth: number;
+        labelHeight: number;
+        minX: number;
+        maxX: number;
+        minY: number;
+        maxY: number;
+        depth: number;
+      }> = [];
       pageSlugs.forEach((slug) => {
         const link = linkRefs.current[slug];
         const hubIndex = engine.hubIndexes.get(slug);
         const hub = hubIndex === undefined ? undefined : engine.projected.get(hubIndex);
         if (!link || !hub) return;
         const labelScale = clamp(0.86 + hub.depth * 0.2, 0.84, 1.08);
+        const size = labelSize(slug, link);
+        const halfWidth = size.halfWidth * labelScale;
+        const labelHeight = size.height * labelScale;
         const margin = Math.min(
-          labelHalfWidth(slug, link) * labelScale + 8,
+          halfWidth + 8,
           width / 2,
         );
         const targetX = clamp(hub.x, margin, Math.max(margin, width - margin));
@@ -518,8 +546,58 @@ export function LatticeCanvas({
         motion.vy = (motion.vy + (targetY - motion.y) * spring) * damping;
         motion.x += engine.reduced ? targetX - motion.x : motion.vx * step;
         motion.y += engine.reduced ? targetY - motion.y : motion.vy * step;
+        states.push({
+          link,
+          motion,
+          labelScale,
+          halfWidth,
+          labelHeight,
+          minX: margin,
+          maxX: Math.max(margin, width - margin),
+          minY: 48,
+          maxY: height - 74,
+          depth: hub.depth,
+        });
+      });
+
+      for (let iteration = 0; iteration < 6; iteration += 1) {
+        for (let firstIndex = 0; firstIndex < states.length; firstIndex += 1) {
+          const first = states[firstIndex];
+          for (let secondIndex = firstIndex + 1; secondIndex < states.length; secondIndex += 1) {
+            const second = states[secondIndex];
+            const deltaX = second.motion.x - first.motion.x;
+            const firstCenterY = first.motion.y + first.labelHeight / 2;
+            const secondCenterY = second.motion.y + second.labelHeight / 2;
+            const deltaY = secondCenterY - firstCenterY;
+            const overlapX = first.halfWidth + second.halfWidth + 8 - Math.abs(deltaX);
+            const overlapY =
+              first.labelHeight / 2 + second.labelHeight / 2 + 6 - Math.abs(deltaY);
+            if (overlapX <= 0 || overlapY <= 0) continue;
+
+            if (overlapX < overlapY) {
+              const direction = deltaX >= 0 ? 1 : -1;
+              const shift = overlapX / 2;
+              first.motion.x -= direction * shift;
+              second.motion.x += direction * shift;
+            } else {
+              const direction = deltaY >= 0 ? 1 : -1;
+              const shift = overlapY / 2;
+              first.motion.y -= direction * shift;
+              second.motion.y += direction * shift;
+            }
+            first.motion.x = clamp(first.motion.x, first.minX, first.maxX);
+            first.motion.y = clamp(first.motion.y, first.minY, first.maxY);
+            second.motion.x = clamp(second.motion.x, second.minX, second.maxX);
+            second.motion.y = clamp(second.motion.y, second.minY, second.maxY);
+          }
+        }
+      }
+
+      states.forEach(({ link, motion, labelScale, minX, maxX, minY, maxY, depth }) => {
+        motion.x = clamp(motion.x, minX, maxX);
+        motion.y = clamp(motion.y, minY, maxY);
         link.style.transform = `translate3d(${motion.x}px, ${motion.y}px, 0) translate(-50%, 0) scale(${labelScale})`;
-        link.style.zIndex = `${Math.round(10 + hub.depth * 20)}`;
+        link.style.zIndex = `${Math.round(10 + depth * 20)}`;
       });
     };
 
@@ -592,11 +670,25 @@ export function LatticeCanvas({
           ? 1
           : smoothStep((time - sceneMotionStartedAt) / 1200);
 
-      if (!engine.dragging && !engine.reduced) {
-        engine.camera.yaw += engine.camera.velocityYaw * step;
-        engine.camera.pitch += engine.camera.velocityPitch * step;
-        engine.camera.velocityYaw *= decayFactor(0.94, step);
-        engine.camera.velocityPitch *= decayFactor(0.9, step);
+      if (!engine.dragging) {
+        if (engine.reduced) {
+          if (!engine.navigatorOpen) {
+            engine.camera.yaw = 0;
+            engine.camera.pitch = 0;
+          }
+        } else if (engine.navigatorOpen) {
+          engine.camera.yaw += engine.camera.velocityYaw * step;
+          engine.camera.pitch += engine.camera.velocityPitch * step;
+          engine.camera.velocityYaw *= decayFactor(0.94, step);
+          engine.camera.velocityPitch *= decayFactor(0.9, step);
+        } else {
+          const returnEase = easeFactor(0.055, step);
+          engine.camera.yaw = normalizeAngle(engine.camera.yaw);
+          engine.camera.yaw += -engine.camera.yaw * returnEase;
+          engine.camera.pitch += -engine.camera.pitch * returnEase;
+          engine.camera.velocityYaw *= decayFactor(0.72, step);
+          engine.camera.velocityPitch *= decayFactor(0.72, step);
+        }
       }
       engine.camera.pitch = clamp(engine.camera.pitch, -0.68, 0.68);
       const autoYaw = engine.reduced
@@ -1243,7 +1335,7 @@ export function LatticeCanvas({
       sizeCanvas();
       engine.layout(!introActive);
       labelMotionRef.current = {};
-      labelHalfWidthRef.current = {};
+      labelSizeRef.current = {};
       introFade = null;
       if (introActive) {
         prepareIntro();
@@ -1308,11 +1400,12 @@ export function LatticeCanvas({
     engine.pointer.active = false;
     engine.hoveredCluster = null;
     engine.hoveredEdge = null;
-    labelHalfWidthRef.current = {};
+    labelSizeRef.current = {};
     if (!navigatorOpen) {
       engine.dragging = null;
       engine.suppressClick = false;
     }
+    if (navigatorOpen) engine.skipIntro();
     engine.requestDraw();
     if (!navigatorOpen) return;
     const frameId = window.requestAnimationFrame(() => {
@@ -1402,6 +1495,7 @@ export function LatticeCanvas({
           aria-label={navigatorLabel}
           aria-modal="true"
           className="lattice-navigation"
+          id="lattice-navigation"
           role="dialog"
         >
           <button
@@ -1411,7 +1505,7 @@ export function LatticeCanvas({
           >
             {closeLabel}
           </button>
-          <nav aria-label={navigatorLabel} className="lattice-navigation__nodes" id="lattice-navigation">
+          <nav aria-label={navigatorLabel} className="lattice-navigation__nodes">
             {pageSlugs.map((slug) => (
               <Link
                 aria-current={active === slug ? "page" : undefined}
@@ -1428,6 +1522,7 @@ export function LatticeCanvas({
                   if (!engine?.suppressClick) return;
                   event.preventDefault();
                   engine.suppressClick = false;
+                  onNavigatorCancelNavigation();
                 }}
                 onFocus={() => {
                   const engine = engineRef.current;
