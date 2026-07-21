@@ -16,6 +16,13 @@ import {
   type PageSlug,
 } from "@/lib/site";
 
+type ProjectedNode = {
+  x: number;
+  y: number;
+  scale: number;
+  depth: number;
+};
+
 type SceneNode = {
   id: number;
   cluster: PageSlug;
@@ -37,14 +44,8 @@ type SceneNode = {
   introBegin: number;
   mobileVisible: boolean;
   seedNode: boolean;
+  projected: ProjectedNode;
   amberWindow?: [number, number];
-};
-
-type ProjectedNode = {
-  x: number;
-  y: number;
-  scale: number;
-  depth: number;
 };
 
 type SceneEdge = {
@@ -332,6 +333,10 @@ export function LatticeCanvas({
     let introFade: { snapshot: HTMLCanvasElement; startedAt: number } | null = null;
     let width = window.innerWidth;
     let height = window.innerHeight;
+    let layoutWidth = width;
+    let layoutHeight = height;
+    let resizeFrame = 0;
+    const reducedQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     const random = () => {
       seed = (seed * 16807) % 2147483647;
       return seed / 2147483647;
@@ -357,7 +362,7 @@ export function LatticeCanvas({
       suppressClick: false,
       navigatorOpen: false,
       navigatorProgress: 0,
-      reduced: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+      reduced: reducedQuery.matches,
       pulse: null,
       layout: () => undefined,
       requestDraw: () => undefined,
@@ -401,7 +406,7 @@ export function LatticeCanvas({
       for (let index = 0; index < count; index += 1) {
         const hub = index === 0;
         const id = engine.nodes.length;
-        engine.nodes.push({
+        const node: SceneNode = {
           id,
           cluster,
           hub,
@@ -422,7 +427,10 @@ export function LatticeCanvas({
           introBegin: 0,
           mobileVisible: true,
           seedNode: false,
-        });
+          projected: { x: width / 2, y: height / 2, scale: 1, depth: 0 },
+        };
+        engine.nodes.push(node);
+        engine.projected.set(id, node.projected);
         if (hub) engine.hubIndexes.set(cluster, id);
       }
 
@@ -487,7 +495,8 @@ export function LatticeCanvas({
       const rotatedY = relativeY * Math.cos(pitch) - rotatedZ * Math.sin(pitch);
       const finalZ = relativeY * Math.sin(pitch) + rotatedZ * Math.cos(pitch);
       const perspective = Math.max(680, Math.min(width, height) * 1.25);
-      const scale = clamp(perspective / (perspective + finalZ), 0.66, 1.42);
+      const depthDenominator = Math.max(perspective + finalZ, perspective * 0.25);
+      const scale = clamp(perspective / depthDenominator, 0.66, 1.42);
       const target = out ?? { x: 0, y: 0, scale: 1, depth: 0 };
       target.x = centerX + rotatedX * scale * zoom;
       target.y = centerY + rotatedY * scale * zoom;
@@ -610,8 +619,7 @@ export function LatticeCanvas({
       let closestNode: SceneNode | null = null;
       let closestNodeDistance = 18;
       for (const node of engine.nodes) {
-        const point = engine.projected.get(node.id);
-        if (!point) continue;
+        const point = node.projected;
         const distance = Math.hypot(
           point.x - engine.pointer.x,
           point.y - engine.pointer.y,
@@ -630,9 +638,8 @@ export function LatticeCanvas({
       let closestEdge: number | null = null;
       let closestEdgeDistance = 6;
       engine.edges.forEach((edge, index) => {
-        const first = engine.projected.get(edge.first);
-        const second = engine.projected.get(edge.second);
-        if (!first || !second) return;
+        const first = engine.nodes[edge.first].projected;
+        const second = engine.nodes[edge.second].projected;
         const distance = distanceToSegment(
           engine.pointer.x,
           engine.pointer.y,
@@ -715,11 +722,7 @@ export function LatticeCanvas({
         const seconds = time / 1000;
         const motion = sceneMotionProgress;
         const floatStrength = (2.2 + progress * 2.8) * motion;
-        let projected = engine.projected.get(node.id);
-        if (!projected) {
-          projected = { x: 0, y: 0, scale: 1, depth: 0 };
-          engine.projected.set(node.id, projected);
-        }
+        const projected = node.projected;
         project(
           node.x + Math.sin(seconds * 0.19 + node.phase) * floatStrength,
           node.y + Math.cos(seconds * 0.16 + node.phase) * floatStrength,
@@ -756,11 +759,10 @@ export function LatticeCanvas({
       context.clearRect(0, 0, width, height);
       const baseAlpha = 0.11 + progress * 0.34;
       engine.edges.forEach((edge, edgeIndex) => {
-        const first = engine.projected.get(edge.first);
-        const second = engine.projected.get(edge.second);
-        if (!first || !second) return;
         const firstNode = engine.nodes[edge.first];
         const secondNode = engine.nodes[edge.second];
+        const first = firstNode.projected;
+        const second = secondNode.projected;
         const activeEdge =
           firstNode.cluster === engine.active ||
           secondNode.cluster === engine.active;
@@ -826,14 +828,9 @@ export function LatticeCanvas({
         }
       });
 
-      depthOrder.sort((first, second) => {
-        const firstDepth = engine.projected.get(first.id)?.scale ?? 1;
-        const secondDepth = engine.projected.get(second.id)?.scale ?? 1;
-        return firstDepth - secondDepth;
-      });
+      depthOrder.sort((first, second) => first.projected.scale - second.projected.scale);
       depthOrder.forEach((node) => {
-        const point = engine.projected.get(node.id);
-        if (!point) return;
+        const point = node.projected;
         const activeNode = node.cluster === engine.active;
         const hovered = node.cluster === engine.hoveredCluster;
         const visitedNode = engine.visited.has(node.cluster);
@@ -1303,6 +1300,31 @@ export function LatticeCanvas({
       else startAnimation();
     };
 
+    /**
+     * The preference can be flipped mid-session, so the scene has to switch
+     * between the animated loop and the redraw-on-demand mode without a reload.
+     */
+    const onReducedChange = (event: MediaQueryListEvent) => {
+      if (engine.reduced === event.matches) return;
+      engine.reduced = event.matches;
+      if (event.matches) {
+        engine.skipIntro();
+        stopAnimation();
+        engine.camera.velocityYaw = 0;
+        engine.camera.velocityPitch = 0;
+        engine.pulse = null;
+        scheduleReducedDraw();
+        return;
+      }
+      if (reducedFrame) {
+        window.cancelAnimationFrame(reducedFrame);
+        reducedFrame = 0;
+      }
+      sceneLastTime = null;
+      sceneMotionStartedAt = performance.now();
+      startAnimation();
+    };
+
     const onPause = () => {
       pausedByOverlay = true;
       stopAnimation();
@@ -1331,18 +1353,36 @@ export function LatticeCanvas({
       scheduleReducedDraw();
     };
 
-    const onResize = () => {
+    /**
+     * Mobile browsers fire `resize` for every URL bar collapse while scrolling.
+     * Those are height-only changes, so the scene keeps its motion state and
+     * eases to the new anchors instead of snapping; only a width change is
+     * treated as a genuine relayout.
+     */
+    const applyResize = () => {
+      resizeFrame = 0;
+      const previousWidth = layoutWidth;
+      const nextWidth = window.innerWidth;
+      const nextHeight = window.innerHeight;
+      if (nextWidth === previousWidth && nextHeight === layoutHeight) return;
+      const widthChanged = nextWidth !== previousWidth;
+      layoutWidth = nextWidth;
+      layoutHeight = nextHeight;
       sizeCanvas();
-      engine.layout(!introActive);
-      labelMotionRef.current = {};
+      engine.layout(!introActive && widthChanged);
       labelSizeRef.current = {};
-      introFade = null;
+      if (widthChanged) labelMotionRef.current = {};
       if (introActive) {
-        prepareIntro();
+        if ((previousWidth < 640) !== (nextWidth < 640)) prepareIntro();
         drawIntro(introElapsed);
-      } else {
+      } else if (!frame) {
         drawScene(performance.now());
       }
+    };
+
+    const onResize = () => {
+      if (resizeFrame) return;
+      resizeFrame = window.requestAnimationFrame(applyResize);
     };
 
     sizeCanvas();
@@ -1360,6 +1400,7 @@ export function LatticeCanvas({
 
     document.addEventListener("visibilitychange", onVisibilityChange);
     document.documentElement.addEventListener("pointerleave", onPointerLeave);
+    reducedQuery.addEventListener("change", onReducedChange);
     window.addEventListener("lattice:pause", onPause);
     window.addEventListener("lattice:resume", onResume);
     window.addEventListener("pointermove", onPointerMove, { passive: true });
@@ -1371,8 +1412,13 @@ export function LatticeCanvas({
         window.cancelAnimationFrame(reducedFrame);
         reducedFrame = 0;
       }
+      if (resizeFrame) {
+        window.cancelAnimationFrame(resizeFrame);
+        resizeFrame = 0;
+      }
       document.removeEventListener("visibilitychange", onVisibilityChange);
       document.documentElement.removeEventListener("pointerleave", onPointerLeave);
+      reducedQuery.removeEventListener("change", onReducedChange);
       window.removeEventListener("lattice:pause", onPause);
       window.removeEventListener("lattice:resume", onResume);
       window.removeEventListener("pointermove", onPointerMove);
