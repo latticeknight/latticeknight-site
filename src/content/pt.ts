@@ -38,7 +38,8 @@ export const pt: SiteDictionary = {
     introduction: "Introdução",
     current: "ACTUAL",
     visited: "VISITADO",
-    mapHint: "ESTÁ NO NÓ MAIS LUMINOSO · AS REGIÕES VISITADAS FICAM ACESAS",
+    mapHint:
+      "ESTÁ NO NÓ MAIS LUMINOSO · ARRASTE PARA RODAR A LATTICE · AS REGIÕES VISITADAS FICAM ACESAS",
     menuHint: "UM SISTEMA · AS REGIÕES VISITADAS FICAM ACESAS",
     footerSystem: "UM SISTEMA",
     footerExplored: "DE 10 REGIÕES EXPLORADAS",

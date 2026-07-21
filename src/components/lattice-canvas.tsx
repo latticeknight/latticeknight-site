@@ -323,6 +323,7 @@ export function LatticeCanvas({
     let introElapsed = 0;
     let introLastTime: number | null = null;
     let introTimings: number[] = [];
+    let introMonoFont: string | null = null;
     let introPruneEdges: PruneEdge[] = [];
     let introHomeSeed: SceneNode | null = null;
     let introHomeSecond: SceneNode | null = null;
@@ -898,7 +899,24 @@ export function LatticeCanvas({
 
     engine.requestDraw = scheduleReducedDraw;
 
+    /**
+     * Reading a custom property forces a style recalculation, so the mono
+     * family is resolved once per intro run instead of on every labelled
+     * frame.
+     */
+    const resolveIntroMonoFont = () => {
+      if (introMonoFont === null) {
+        introMonoFont =
+          window
+            .getComputedStyle(document.documentElement)
+            .getPropertyValue("--font-mono")
+            .trim() || '"IBM Plex Mono"';
+      }
+      return introMonoFont;
+    };
+
     const prepareIntro = () => {
+      introMonoFont = null;
       const scale = width < 640 ? 0.78 : 1;
       introTimings = [0, 0.45, 0.95, 1.7, 2.75, 3.55, 4.35, 5.3].map(
         (time) => time * scale,
@@ -1163,12 +1181,7 @@ export function LatticeCanvas({
       });
 
       if (elapsed > introTimings[4] - 0.05 && handoff < 0.98) {
-        const fontFamily =
-          window
-            .getComputedStyle(document.documentElement)
-            .getPropertyValue("--font-mono")
-            .trim() || '"IBM Plex Mono"';
-        context.font = `10px ${fontFamily}, monospace`;
+        context.font = `10px ${resolveIntroMonoFont()}, monospace`;
         context.textAlign = "center";
         pageSlugs.forEach((slug) => {
           if (slug === "home") return;
@@ -1231,7 +1244,12 @@ export function LatticeCanvas({
     };
 
     engine.skipIntro = () => {
-      if (!introActive) return;
+      const hadFade = introFade !== null;
+      introFade = null;
+      if (!introActive) {
+        if (hadFade && !frame) drawScene(performance.now());
+        return;
+      }
       introActive = false;
       introElapsed = introTimings[7] ?? 5.3;
       settleAtScene();
@@ -1372,6 +1390,7 @@ export function LatticeCanvas({
       layoutWidth = nextWidth;
       layoutHeight = nextHeight;
       sizeCanvas();
+      introFade = null;
       engine.layout(!introActive && widthChanged);
       labelSizeRef.current = {};
       if (widthChanged) labelMotionRef.current = {};

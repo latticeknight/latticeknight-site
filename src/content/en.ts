@@ -38,7 +38,8 @@ export const en: SiteDictionary = {
     introduction: "Introduction",
     current: "CURRENT",
     visited: "VISITED",
-    mapHint: "YOU ARE AT THE BRIGHT NODE · VISITED REGIONS STAY LIT",
+    mapHint:
+      "YOU ARE AT THE BRIGHT NODE · DRAG TO TURN THE LATTICE · VISITED REGIONS STAY LIT",
     menuHint: "ONE SYSTEM · VISITED REGIONS STAY LIT",
     footerSystem: "ONE SYSTEM",
     footerExplored: "OF 10 REGIONS EXPLORED",
