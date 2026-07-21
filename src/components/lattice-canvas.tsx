@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useRef,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
@@ -325,6 +326,8 @@ export function LatticeCanvas({
     let introElapsed = 0;
     let introLastTime: number | null = null;
     let introTimings: number[] = [];
+    let introScale = 0;
+    const introProjection: ProjectedNode = { x: 0, y: 0, scale: 1, depth: 0 };
     let introMonoFont: string | null = null;
     let introPruneEdges: PruneEdge[] = [];
     let introHomeSeed: SceneNode | null = null;
@@ -746,7 +749,7 @@ export function LatticeCanvas({
           engine.pointer.x - projected.x,
           engine.pointer.y - projected.y,
         );
-        const radius = progress > 0.1 ? 300 : 155;
+        const radius = 155 + progress * 145;
         const falloff =
           engine.pointer.active && distance < radius
             ? Math.pow(1 - distance / radius, 2)
@@ -927,6 +930,13 @@ export function LatticeCanvas({
       introTimings = [0, 0.45, 0.95, 1.7, 2.75, 3.55, 4.35, 5.3].map(
         (time) => time * scale,
       );
+      if (introScale > 0 && introScale !== scale) {
+        introElapsed = Math.min(
+          introElapsed * (scale / introScale),
+          introTimings[7],
+        );
+      }
+      introScale = scale;
       const byCluster = {} as Record<PageSlug, SceneNode[]>;
       pageSlugs.forEach((slug) => {
         byCluster[slug] = [];
@@ -1053,6 +1063,7 @@ export function LatticeCanvas({
           0,
           0,
           1,
+          introProjection,
         );
         x += (target.x - x) * handoff;
         y += (target.y - y) * handoff;
@@ -1515,7 +1526,9 @@ export function LatticeCanvas({
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     const engine = engineRef.current;
-    if (!engine || !navigatorOpen || event.button !== 0) return;
+    if (!engine || !navigatorOpen) return;
+    engine.suppressClick = false;
+    if (event.button !== 0) return;
     if ((event.target as Element).closest("a, button")) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     engine.dragging = {
@@ -1553,23 +1566,31 @@ export function LatticeCanvas({
     redrawIfReduced();
   };
 
-  const finishDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const endDrag = (
+    event: ReactPointerEvent<HTMLDivElement>,
+    suppressClick: boolean,
+  ) => {
     const engine = engineRef.current;
     if (!engine?.dragging || engine.dragging.pointerId !== event.pointerId) return;
-    if (engine.dragging.moved) {
-      engine.suppressClick = true;
-      window.setTimeout(() => {
-        if (engineRef.current === engine) engine.suppressClick = false;
-      }, 0);
-    }
+    if (suppressClick && engine.dragging.moved) engine.suppressClick = true;
     engine.dragging = null;
     redrawIfReduced();
+  };
+
+  const handleClickCapture = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const engine = engineRef.current;
+    if (!engine?.suppressClick) return;
+    engine.suppressClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+    onNavigatorCancelNavigation();
   };
 
   return (
     <div
       className={`lattice-scene${navigatorOpen ? " lattice-scene--navigator" : ""}`}
-      onPointerCancel={finishDrag}
+      onClickCapture={handleClickCapture}
+      onPointerCancel={(event) => endDrag(event, false)}
       onPointerDown={handlePointerDown}
       onPointerLeave={() => {
         const engine = engineRef.current;
@@ -1578,7 +1599,7 @@ export function LatticeCanvas({
         redrawIfReduced();
       }}
       onPointerMove={handlePointerMove}
-      onPointerUp={finishDrag}
+      onPointerUp={(event) => endDrag(event, true)}
     >
       <canvas aria-hidden="true" className="lattice-canvas" ref={canvasRef} />
       {navigatorOpen ? (
@@ -1607,13 +1628,6 @@ export function LatticeCanvas({
                   const engine = engineRef.current;
                   if (engine?.hoveredCluster === slug) engine.hoveredCluster = null;
                   redrawIfReduced();
-                }}
-                onClick={(event) => {
-                  const engine = engineRef.current;
-                  if (!engine?.suppressClick) return;
-                  event.preventDefault();
-                  engine.suppressClick = false;
-                  onNavigatorCancelNavigation();
                 }}
                 onFocus={() => {
                   const engine = engineRef.current;
