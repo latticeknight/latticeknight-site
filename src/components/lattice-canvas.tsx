@@ -603,8 +603,11 @@ export function LatticeCanvas({
       }
 
       states.forEach(({ link, motion, labelScale, minX, maxX, minY, maxY, depth }) => {
-        motion.x = clamp(motion.x, minX, maxX);
-        motion.y = clamp(motion.y, minY, maxY);
+        const boundedX = clamp(motion.x, minX, maxX);
+        const boundedY = clamp(motion.y, minY, maxY);
+        const boundaryEase = engine.reduced ? 1 : easeFactor(0.32, step);
+        motion.x += (boundedX - motion.x) * boundaryEase;
+        motion.y += (boundedY - motion.y) * boundaryEase;
         link.style.transform = `translate3d(${motion.x}px, ${motion.y}px, 0) translate(-50%, 0) scale(${labelScale})`;
         link.style.zIndex = `${Math.round(10 + depth * 20)}`;
       });
