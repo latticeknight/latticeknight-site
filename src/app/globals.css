@@ -201,7 +201,7 @@ button {
   opacity: 1;
 }
 
-.site-shell--intro-pending .lattice-scene,
+:root:not([data-lk-intro="off"]) .site-shell--intro-pending .lattice-scene,
 .site-shell--intro-forming .lattice-scene,
 .site-shell--intro-identity .lattice-scene,
 .site-shell--intro-handoff .lattice-scene {

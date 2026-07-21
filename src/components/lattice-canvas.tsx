@@ -94,7 +94,6 @@ type SceneEngine = {
   visited: Set<PageSlug>;
   nodes: SceneNode[];
   edges: SceneEdge[];
-  projected: Map<number, ProjectedNode>;
   hubIndexes: Map<PageSlug, number>;
   hoveredCluster: PageSlug | null;
   hoveredEdge: number | null;
@@ -353,7 +352,6 @@ export function LatticeCanvas({
       visited: new Set(initialVisitedRef.current),
       nodes: [],
       edges: [],
-      projected: new Map(),
       hubIndexes: new Map(),
       hoveredCluster: null,
       hoveredEdge: null,
@@ -436,7 +434,6 @@ export function LatticeCanvas({
           projected: { x: width / 2, y: height / 2, scale: 1, depth: 0 },
         };
         engine.nodes.push(node);
-        engine.projected.set(id, node.projected);
         if (hub) engine.hubIndexes.set(cluster, id);
       }
 
@@ -542,7 +539,8 @@ export function LatticeCanvas({
       pageSlugs.forEach((slug) => {
         const link = linkRefs.current[slug];
         const hubIndex = engine.hubIndexes.get(slug);
-        const hub = hubIndex === undefined ? undefined : engine.projected.get(hubIndex);
+        const hub =
+          hubIndex === undefined ? undefined : engine.nodes[hubIndex]?.projected;
         if (!link || !hub) return;
         const labelScale = clamp(0.86 + hub.depth * 0.2, 0.84, 1.08);
         const size = labelSize(slug, link);
@@ -671,6 +669,46 @@ export function LatticeCanvas({
 
     const depthOrder = engine.nodes.slice();
 
+    /**
+     * Every edge style resolves to one of eight alpha values per frame, so the
+     * colour strings are built once per distinct base alpha and the endpoint
+     * gradients are kept until the projected endpoints move perceptibly. The
+     * ambient loop then runs without per-edge allocations.
+     */
+    const edgeAlphaMultipliers = [1.9, 1.35, 1.08, 0.7];
+    const gradientTolerance = 1.5;
+    let edgeStyles: {
+      baseAlpha: number;
+      alpha: number[];
+      dim: string[];
+      glow: string[];
+    } | null = null;
+    const edgeGradients: Array<{
+      gradient: CanvasGradient;
+      alpha: number;
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+    } | null> = [];
+
+    const resolveEdgeStyles = (baseAlpha: number) => {
+      if (edgeStyles && edgeStyles.baseAlpha === baseAlpha) return edgeStyles;
+      const alpha: number[] = [];
+      const dim: string[] = [];
+      const glow: string[] = [];
+      edgeAlphaMultipliers.forEach((multiplier) => {
+        [1, 0.62].forEach((routeFactor) => {
+          const value = baseAlpha * multiplier * routeFactor;
+          alpha.push(value);
+          dim.push(`rgba(164,186,179,${value * 0.71})`);
+          glow.push(`rgba(142,196,214,${value * 0.13})`);
+        });
+      });
+      edgeStyles = { baseAlpha, alpha, dim, glow };
+      return edgeStyles;
+    };
+
     const drawScene = (time = performance.now()) => {
       const previousTime = sceneLastTime;
       const step =
@@ -771,6 +809,7 @@ export function LatticeCanvas({
       updateHoverTarget();
       context.clearRect(0, 0, width, height);
       const baseAlpha = 0.11 + progress * 0.34;
+      const styles = resolveEdgeStyles(baseAlpha);
       engine.edges.forEach((edge, edgeIndex) => {
         const firstNode = engine.nodes[edge.first];
         const secondNode = engine.nodes[edge.second];
@@ -786,16 +825,12 @@ export function LatticeCanvas({
         const visitedEdge =
           engine.visited.has(firstNode.cluster) &&
           engine.visited.has(secondNode.cluster);
-        const alphaMultiplier = hovered
-          ? 1.9
-          : activeEdge
-            ? 1.35
-            : visitedEdge
-              ? 1.08
-              : 0.7;
-        const alpha = baseAlpha * alphaMultiplier * (edge.route ? 1 : 0.62);
+        const styleIndex =
+          (hovered ? 0 : activeEdge ? 1 : visitedEdge ? 2 : 3) * 2 +
+          (edge.route ? 0 : 1);
+        const alpha = styles.alpha[styleIndex];
         if (hovered || (progress > 0.45 && activeEdge && edge.route)) {
-          context.strokeStyle = `rgba(142,196,214,${alpha * 0.13})`;
+          context.strokeStyle = styles.glow[styleIndex];
           context.lineWidth = edge.route ? 6 : 4;
           context.beginPath();
           context.moveTo(first.x, first.y);
@@ -803,20 +838,39 @@ export function LatticeCanvas({
           context.stroke();
         }
         if (edge.route || activeEdge || hovered) {
-          const gradient = context.createLinearGradient(
-            first.x,
-            first.y,
-            second.x,
-            second.y,
-          );
-          gradient.addColorStop(0, `rgba(142,196,214,${alpha})`);
-          gradient.addColorStop(
-            1,
-            `rgba(216,163,95,${alpha * (edge.route ? 0.78 : 0.42)})`,
-          );
-          context.strokeStyle = gradient;
+          let cached = edgeGradients[edgeIndex];
+          if (
+            !cached ||
+            cached.alpha !== alpha ||
+            Math.abs(cached.x1 - first.x) > gradientTolerance ||
+            Math.abs(cached.y1 - first.y) > gradientTolerance ||
+            Math.abs(cached.x2 - second.x) > gradientTolerance ||
+            Math.abs(cached.y2 - second.y) > gradientTolerance
+          ) {
+            const gradient = context.createLinearGradient(
+              first.x,
+              first.y,
+              second.x,
+              second.y,
+            );
+            gradient.addColorStop(0, `rgba(142,196,214,${alpha})`);
+            gradient.addColorStop(
+              1,
+              `rgba(216,163,95,${alpha * (edge.route ? 0.78 : 0.42)})`,
+            );
+            cached = {
+              gradient,
+              alpha,
+              x1: first.x,
+              y1: first.y,
+              x2: second.x,
+              y2: second.y,
+            };
+            edgeGradients[edgeIndex] = cached;
+          }
+          context.strokeStyle = cached.gradient;
         } else {
-          context.strokeStyle = `rgba(164,186,179,${alpha * 0.71})`;
+          context.strokeStyle = styles.dim[styleIndex];
         }
         context.lineWidth = edge.route ? 0.85 + progress * 0.45 : 0.55;
         context.beginPath();
@@ -881,8 +935,10 @@ export function LatticeCanvas({
       if (engine.pulse) {
         const fromIndex = engine.hubIndexes.get(engine.pulse.from);
         const toIndex = engine.hubIndexes.get(engine.pulse.to);
-        const from = fromIndex === undefined ? undefined : engine.projected.get(fromIndex);
-        const to = toIndex === undefined ? undefined : engine.projected.get(toIndex);
+        const from =
+          fromIndex === undefined ? undefined : engine.nodes[fromIndex]?.projected;
+        const to =
+          toIndex === undefined ? undefined : engine.nodes[toIndex]?.projected;
         if (from && to) {
           const pulseProgress = engine.pulse.progress;
           const pulseX = from.x + (to.x - from.x) * pulseProgress;
@@ -1248,8 +1304,8 @@ export function LatticeCanvas({
       return snapshot;
     };
 
-    const finishIntro = (time: number) => {
-      const snapshot = captureIntroFrame();
+    const endIntro = (time: number, crossfade: boolean) => {
+      const snapshot = crossfade ? captureIntroFrame() : null;
       introActive = false;
       introElapsed = introTimings[7] ?? 5.3;
       settleAtScene();
@@ -1263,19 +1319,13 @@ export function LatticeCanvas({
     engine.skipIntro = () => {
       const hadFade = introFade !== null;
       introFade = null;
+      const now = performance.now();
       if (!introActive) {
-        if (hadFade && !frame) drawScene(performance.now());
+        if (hadFade && !frame) drawScene(now);
         return;
       }
-      introActive = false;
-      introElapsed = introTimings[7] ?? 5.3;
-      settleAtScene();
-      sceneMotionStartedAt = performance.now();
-      sceneLastTime = null;
-      introFade = null;
-      markIntroDone();
-      drawScene(performance.now());
-      callbacksRef.current.onIntroComplete();
+      endIntro(now, false);
+      drawScene(now);
     };
 
     const startIntro = () => {
@@ -1305,7 +1355,7 @@ export function LatticeCanvas({
           handoffNotified = true;
           callbacksRef.current.onIntroHandoff();
         }
-        if (introElapsed >= introTimings[7]) finishIntro(time);
+        if (introElapsed >= introTimings[7]) endIntro(time, true);
       } else if (introFade) {
         const overlay = introFade;
         const fade = clamp((time - overlay.startedAt) / introFadeDuration);
@@ -1484,13 +1534,17 @@ export function LatticeCanvas({
     engine.pointer.active = false;
     engine.hoveredCluster = null;
     engine.hoveredEdge = null;
-    labelSizeRef.current = {};
     if (!navigatorOpen) {
       engine.dragging = null;
       engine.suppressClick = false;
+    } else {
+      engine.skipIntro();
     }
-    if (navigatorOpen) engine.skipIntro();
     engine.requestDraw();
+  }, [navigatorOpen]);
+
+  useEffect(() => {
+    labelSizeRef.current = {};
     if (!navigatorOpen) return;
     const frameId = window.requestAnimationFrame(() => {
       linkRefs.current[active]?.focus({ preventScroll: true });
@@ -1530,7 +1584,11 @@ export function LatticeCanvas({
     engine.suppressClick = false;
     if (event.button !== 0) return;
     if ((event.target as Element).closest("a, button")) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      return;
+    }
     engine.dragging = {
       pointerId: event.pointerId,
       lastX: event.clientX,
