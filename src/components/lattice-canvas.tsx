@@ -278,6 +278,8 @@ export function LatticeCanvas({
   const linkRefs = useRef<Partial<Record<PageSlug, HTMLAnchorElement | null>>>({});
   const labelMotionRef = useRef<Partial<Record<PageSlug, LabelMotion>>>({});
   const labelSizeRef = useRef<Partial<Record<PageSlug, LabelSize>>>({});
+  const hintRef = useRef<HTMLParagraphElement>(null);
+  const hintHeightRef = useRef(0);
   const initialActiveRef = useRef(active);
   const initialVisitedRef = useRef(visited);
   const initialLabelsRef = useRef(labels);
@@ -518,6 +520,10 @@ export function LatticeCanvas({
     };
 
     const updateLabels = (step: number) => {
+      const labelMaxY = Math.max(
+        48,
+        height - Math.max(74, hintHeightRef.current + (width < 640 ? 55 : 62)),
+      );
       const states: Array<{
         link: HTMLAnchorElement;
         motion: LabelMotion;
@@ -544,7 +550,7 @@ export function LatticeCanvas({
           width / 2,
         );
         const targetX = clamp(hub.x, margin, Math.max(margin, width - margin));
-        const targetY = clamp(hub.y + 18 * hub.scale, 48, height - 74);
+        const targetY = clamp(hub.y + 18 * hub.scale, 48, labelMaxY);
         let motion = labelMotionRef.current[slug];
         if (!motion) {
           motion = { x: targetX, y: targetY, vx: 0, vy: 0 };
@@ -565,7 +571,7 @@ export function LatticeCanvas({
           minX: margin,
           maxX: Math.max(margin, width - margin),
           minY: 48,
-          maxY: height - 74,
+          maxY: labelMaxY,
           depth: hub.depth,
         });
       });
@@ -1390,7 +1396,6 @@ export function LatticeCanvas({
       layoutWidth = nextWidth;
       layoutHeight = nextHeight;
       sizeCanvas();
-      introFade = null;
       engine.layout(!introActive && widthChanged);
       labelSizeRef.current = {};
       if (widthChanged) labelMotionRef.current = {};
@@ -1481,6 +1486,24 @@ export function LatticeCanvas({
     });
     return () => window.cancelAnimationFrame(frameId);
   }, [active, navigatorOpen]);
+
+  useEffect(() => {
+    const hint = hintRef.current;
+    if (!navigatorOpen || !hint) {
+      hintHeightRef.current = 0;
+      return;
+    }
+    const updateHintHeight = () => {
+      const height = hint.offsetHeight;
+      if (hintHeightRef.current === height) return;
+      hintHeightRef.current = height;
+      engineRef.current?.requestDraw();
+    };
+    updateHintHeight();
+    const observer = new ResizeObserver(updateHintHeight);
+    observer.observe(hint);
+    return () => observer.disconnect();
+  }, [navigatorHint, navigatorOpen]);
 
   useEffect(() => {
     if (introSkipKey > 0) engineRef.current?.skipIntro();
@@ -1619,7 +1642,7 @@ export function LatticeCanvas({
               </Link>
             ))}
           </nav>
-          <p className="lattice-navigation__hint">{navigatorHint}</p>
+          <p className="lattice-navigation__hint" ref={hintRef}>{navigatorHint}</p>
         </div>
       ) : null}
     </div>
