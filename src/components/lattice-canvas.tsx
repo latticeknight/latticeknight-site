@@ -1572,7 +1572,12 @@ export function LatticeCanvas({
   ) => {
     const engine = engineRef.current;
     if (!engine?.dragging || engine.dragging.pointerId !== event.pointerId) return;
-    if (suppressClick && engine.dragging.moved) engine.suppressClick = true;
+    if (suppressClick && engine.dragging.moved) {
+      engine.suppressClick = true;
+      window.requestAnimationFrame(() => {
+        if (engineRef.current === engine) engine.suppressClick = false;
+      });
+    }
     engine.dragging = null;
     redrawIfReduced();
   };
@@ -1581,6 +1586,7 @@ export function LatticeCanvas({
     const engine = engineRef.current;
     if (!engine?.suppressClick) return;
     engine.suppressClick = false;
+    if (event.detail === 0) return;
     event.preventDefault();
     event.stopPropagation();
     onNavigatorCancelNavigation();
