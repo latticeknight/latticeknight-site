@@ -82,8 +82,8 @@ No environment variables or external data services are required.
 - `src/lib/metadata.ts` centralizes the site name, title suffix, canonical URL, and OpenGraph locale helpers.
 - `src/components/pages` contains one modular page implementation per region.
 - `src/content` contains the English UK and Portuguese Portugal dictionaries.
-- `src/components/site-shell.tsx` owns persistent navigation, language switching, visit history, and the interactive lattice.
-- `src/components/lattice-canvas.tsx` owns the ambient connected graph and the intro lattice animation it hands off from.
+- `src/components/site-shell.tsx` owns persistent navigation, language switching, visit history, and lattice-scene state.
+- `src/components/lattice-canvas.tsx` owns one continuous lattice scene across the intro, ambient background, and interactive navigation modes.
 - `src/components/lattice-intro.tsx` owns the intro overlay copy, skip control, and stage presentation.
 - `src/lib/intro-decision.ts` is the single place the play/off rule is evaluated, before first paint, for both the pre-hydration styles and the hydrated canvas.
 - `src/components/portrait-video.tsx` owns the opt-in About portrait video surface.

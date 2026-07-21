@@ -1,22 +1,35 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import Link from "next/link";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 
 import { INTRO_SEEN_KEY, introWillPlay } from "@/lib/intro-decision";
-import { pageSlugs, type PageSlug } from "@/lib/site";
+import {
+  hrefFor,
+  pageSlugs,
+  type Locale,
+  type PageSlug,
+} from "@/lib/site";
 
-type NodePoint = {
+type SceneNode = {
+  id: number;
   cluster: PageSlug;
+  hub: boolean;
   angle: number;
   radius: number;
   x: number;
   y: number;
+  z: number;
   targetX: number;
   targetY: number;
-  offsetX: number;
-  offsetY: number;
-  breatheX: number;
-  breatheY: number;
+  targetZ: number;
+  attractionX: number;
+  attractionY: number;
   amber: boolean;
   phase: number;
   size: number;
@@ -27,21 +40,65 @@ type NodePoint = {
   amberWindow?: [number, number];
 };
 
+type ProjectedNode = {
+  x: number;
+  y: number;
+  scale: number;
+  depth: number;
+};
+
+type SceneEdge = {
+  first: number;
+  second: number;
+  route: boolean;
+};
+
 type PruneEdge = {
-  first: NodePoint;
-  second: NodePoint;
+  first: SceneNode;
+  second: SceneNode;
   startsAt: number;
   endsAt: number;
   amber: boolean;
 };
 
-type Engine = {
+type LabelMotion = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+};
+
+type CameraState = {
+  yaw: number;
+  pitch: number;
+  velocityYaw: number;
+  velocityPitch: number;
+};
+
+type DragState = {
+  pointerId: number;
+  lastX: number;
+  lastY: number;
+  moved: boolean;
+};
+
+type SceneEngine = {
   active: PageSlug;
   visited: Set<PageSlug>;
-  nodes: NodePoint[];
-  edges: Array<[number, number]>;
-  pulse: { from: PageSlug; to: PageSlug; progress: number } | null;
+  nodes: SceneNode[];
+  edges: SceneEdge[];
+  projected: Map<number, ProjectedNode>;
+  hubIndexes: Map<PageSlug, number>;
+  hoveredCluster: PageSlug | null;
+  hoveredEdge: number | null;
+  pointer: { x: number; y: number; active: boolean };
+  camera: CameraState;
+  dragging: DragState | null;
+  suppressClick: boolean;
+  navigatorOpen: boolean;
+  navigatorProgress: number;
   reduced: boolean;
+  pulse: { from: PageSlug; to: PageSlug; progress: number } | null;
   layout: (immediate: boolean) => void;
   draw: (time?: number) => void;
   skipIntro: () => void;
@@ -51,8 +108,15 @@ type LatticeCanvasProps = {
   active: PageSlug;
   visited: PageSlug[];
   labels: Record<PageSlug, string>;
+  locale: Locale;
   introEnabled: boolean;
   introSkipKey: number;
+  navigatorOpen: boolean;
+  navigatorLabel: string;
+  navigatorHint: string;
+  closeLabel: string;
+  onNavigatorClose: () => void;
+  onNavigatorNavigate: () => void;
   onIntroStart: () => void;
   onIntroIdentity: () => void;
   onIntroHandoff: () => void;
@@ -63,28 +127,30 @@ const routes: Array<[PageSlug, PageSlug]> = [
   ["home", "systems"],
   ["home", "sdlc"],
   ["home", "notes"],
+  ["home", "lab"],
+  ["home", "about"],
+  ["home", "contact"],
   ["systems", "sdlc"],
   ["sdlc", "workflows"],
   ["workflows", "automation"],
   ["automation", "tooling"],
   ["notes", "systems"],
-  ["about", "contact"],
-  ["home", "lab"],
-  ["lab", "workflows"],
   ["notes", "workflows"],
+  ["lab", "workflows"],
+  ["about", "contact"],
 ];
 
-const introMapPositions: Record<PageSlug, [number, number]> = {
-  home: [50, 45],
-  systems: [22, 24],
-  sdlc: [50, 12],
-  workflows: [78, 22],
-  automation: [90, 50],
-  tooling: [78, 78],
-  lab: [50, 88],
-  notes: [22, 76],
-  about: [10, 50],
-  contact: [32, 58],
+const mapPositions: Record<PageSlug, [number, number, number]> = {
+  home: [50, 45, -0.06],
+  systems: [22, 24, 0.2],
+  sdlc: [50, 12, -0.18],
+  workflows: [78, 22, 0.12],
+  automation: [90, 50, -0.12],
+  tooling: [78, 78, 0.24],
+  lab: [50, 88, -0.2],
+  notes: [22, 76, 0.1],
+  about: [10, 50, -0.14],
+  contact: [32, 58, 0.18],
 };
 
 const introParents: Partial<Record<PageSlug, PageSlug>> = {
@@ -99,7 +165,13 @@ const introParents: Partial<Record<PageSlug, PageSlug>> = {
   tooling: "automation",
 };
 
-const primaryIntroLabels = new Set<PageSlug>(["systems", "sdlc", "workflows", "automation", "notes"]);
+const primaryIntroLabels = new Set<PageSlug>([
+  "systems",
+  "sdlc",
+  "workflows",
+  "automation",
+  "notes",
+]);
 
 function clamp(value: number, minimum = 0, maximum = 1) {
   return Math.max(minimum, Math.min(maximum, value));
@@ -112,27 +184,46 @@ function smoothStep(value: number) {
 
 function travelStep(value: number) {
   const time = clamp(value);
-  return time < 0.5 ? 2 * time * time : 1 - Math.pow(-2 * time + 2, 2) / 2;
+  return time < 0.5
+    ? 2 * time * time
+    : 1 - Math.pow(-2 * time + 2, 2) / 2;
 }
 
-function anchor(cluster: PageSlug, active: PageSlug) {
-  const width = window.innerWidth;
-  const height = window.innerHeight;
-  if (cluster === active) {
-    return {
-      x: width * 0.5,
-      y: height * 0.46,
-      radius: Math.min(width, height) * 0.34,
-    };
-  }
+function distanceToSegment(
+  pointX: number,
+  pointY: number,
+  firstX: number,
+  firstY: number,
+  secondX: number,
+  secondY: number,
+) {
+  const deltaX = secondX - firstX;
+  const deltaY = secondY - firstY;
+  const lengthSquared = deltaX * deltaX + deltaY * deltaY;
+  if (lengthSquared === 0) return Math.hypot(pointX - firstX, pointY - firstY);
+  const progress = clamp(
+    ((pointX - firstX) * deltaX + (pointY - firstY) * deltaY) /
+      lengthSquared,
+  );
+  return Math.hypot(
+    pointX - (firstX + progress * deltaX),
+    pointY - (firstY + progress * deltaY),
+  );
+}
 
-  const others = pageSlugs.filter((slug) => slug !== active);
-  const index = others.indexOf(cluster);
-  const angle = (index / others.length) * Math.PI * 2 - Math.PI / 2;
+function anchorPosition(
+  cluster: PageSlug,
+  width: number,
+  height: number,
+) {
+  const [mapX, mapY, mapZ] = mapPositions[cluster];
+  const compact = width < 640;
+  const factorX = compact ? 0.9 : 0.84;
+  const factorY = compact ? 0.9 : 0.84;
   return {
-    x: width * 0.5 + Math.cos(angle) * width * 0.44,
-    y: height * 0.46 + Math.sin(angle) * height * 0.42,
-    radius: Math.min(width, height) * 0.055,
+    x: width * 0.5 + ((mapX - 50) / 100) * width * factorX,
+    y: height * 0.46 + ((mapY - 46) / 100) * height * factorY,
+    z: mapZ * Math.min(width, height),
   };
 }
 
@@ -140,24 +231,48 @@ export function LatticeCanvas({
   active,
   visited,
   labels,
+  locale,
   introEnabled,
   introSkipKey,
+  navigatorOpen,
+  navigatorLabel,
+  navigatorHint,
+  closeLabel,
+  onNavigatorClose,
+  onNavigatorNavigate,
   onIntroStart,
   onIntroIdentity,
   onIntroHandoff,
   onIntroComplete,
 }: LatticeCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const engineRef = useRef<Engine | null>(null);
+  const sceneRef = useRef<HTMLDivElement>(null);
+  const engineRef = useRef<SceneEngine | null>(null);
+  const linkRefs = useRef<Partial<Record<PageSlug, HTMLAnchorElement | null>>>({});
+  const labelMotionRef = useRef<Partial<Record<PageSlug, LabelMotion>>>({});
   const initialActiveRef = useRef(active);
   const initialVisitedRef = useRef(visited);
   const initialLabelsRef = useRef(labels);
   const initialIntroEnabledRef = useRef(introEnabled);
-  const callbacksRef = useRef({ onIntroStart, onIntroIdentity, onIntroHandoff, onIntroComplete });
+  const callbacksRef = useRef({
+    onIntroStart,
+    onIntroIdentity,
+    onIntroHandoff,
+    onIntroComplete,
+  });
 
   useEffect(() => {
-    callbacksRef.current = { onIntroStart, onIntroIdentity, onIntroHandoff, onIntroComplete };
+    callbacksRef.current = {
+      onIntroStart,
+      onIntroIdentity,
+      onIntroHandoff,
+      onIntroComplete,
+    };
   }, [onIntroComplete, onIntroHandoff, onIntroIdentity, onIntroStart]);
+
+  useEffect(() => {
+    initialLabelsRef.current = labels;
+  }, [labels]);
 
   useEffect(() => {
     const canvasElement = canvasRef.current;
@@ -165,8 +280,8 @@ export function LatticeCanvas({
       callbacksRef.current.onIntroComplete();
       return;
     }
-    const drawingContext = canvasElement.getContext("2d");
-    if (!drawingContext) {
+    const context = canvasElement.getContext("2d");
+    if (!context) {
       callbacksRef.current.onIntroComplete();
       return;
     }
@@ -179,167 +294,467 @@ export function LatticeCanvas({
     let introLastTime: number | null = null;
     let introTimings: number[] = [];
     let introPruneEdges: PruneEdge[] = [];
-    let introHomeSeed: NodePoint | null = null;
-    let introHomeSecond: NodePoint | null = null;
+    let introHomeSeed: SceneNode | null = null;
+    let introHomeSecond: SceneNode | null = null;
     let identityNotified = false;
     let handoffNotified = false;
-    const pointer = { x: -999, y: -999 };
+    let sceneMotionStartedAt: number | null = null;
+    let width = window.innerWidth;
+    let height = window.innerHeight;
     const random = () => {
       seed = (seed * 16807) % 2147483647;
       return seed / 2147483647;
     };
 
-    const engine: Engine = {
+    const engine: SceneEngine = {
       active: initialActiveRef.current,
       visited: new Set(initialVisitedRef.current),
       nodes: [],
       edges: [],
-      pulse: null,
+      projected: new Map(),
+      hubIndexes: new Map(),
+      hoveredCluster: null,
+      hoveredEdge: null,
+      pointer: { x: -999, y: -999, active: false },
+      camera: {
+        yaw: 0,
+        pitch: 0,
+        velocityYaw: 0,
+        velocityPitch: 0,
+      },
+      dragging: null,
+      suppressClick: false,
+      navigatorOpen: false,
+      navigatorProgress: 0,
       reduced: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+      pulse: null,
       layout: () => undefined,
       draw: () => undefined,
       skipIntro: () => undefined,
     };
 
     const sizeCanvas = () => {
+      width = window.innerWidth;
+      height = window.innerHeight;
       const density = Math.min(window.devicePixelRatio || 1, 2);
-      canvasElement.width = window.innerWidth * density;
-      canvasElement.height = window.innerHeight * density;
-      drawingContext.setTransform(density, 0, 0, density, 0, 0);
+      canvasElement.width = Math.round(width * density);
+      canvasElement.height = Math.round(height * density);
+      canvasElement.style.width = `${width}px`;
+      canvasElement.style.height = `${height}px`;
+      context.setTransform(density, 0, 0, density, 0, 0);
     };
 
     const edgeKeys = new Set<string>();
-    const addEdge = (first: number, second: number) => {
+    const addEdge = (first: number, second: number, route = false) => {
       if (first === second) return;
       const key = first < second ? `${first}:${second}` : `${second}:${first}`;
-      if (edgeKeys.has(key)) return;
+      if (edgeKeys.has(key)) {
+        if (route) {
+          const edge = engine.edges.find(
+            (candidate) =>
+              (candidate.first === first && candidate.second === second) ||
+              (candidate.first === second && candidate.second === first),
+          );
+          if (edge) edge.route = true;
+        }
+        return;
+      }
       edgeKeys.add(key);
-      engine.edges.push([first, second]);
+      engine.edges.push({ first, second, route });
     };
 
-    const nodesPerCluster = window.innerWidth < 640 ? 8 : window.innerWidth < 1200 ? 10 : 14;
-    pageSlugs.forEach((cluster, clusterIndex) => {
-      const count = clusterIndex === 0 ? nodesPerCluster + 3 : nodesPerCluster;
+    const nodesPerCluster = width < 640 ? 7 : width < 1200 ? 9 : 12;
+    pageSlugs.forEach((cluster) => {
+      const count = cluster === "home" ? nodesPerCluster + 2 : nodesPerCluster;
       const start = engine.nodes.length;
       for (let index = 0; index < count; index += 1) {
+        const hub = index === 0;
+        const id = engine.nodes.length;
         engine.nodes.push({
+          id,
           cluster,
-          angle: random() * Math.PI * 2,
-          radius: 0.25 + random() * 0.75,
-          x: window.innerWidth / 2,
-          y: window.innerHeight / 2,
-          targetX: 0,
-          targetY: 0,
-          offsetX: 0,
-          offsetY: 0,
-          breatheX: 0,
-          breatheY: 0,
-          amber: random() < 0.14,
+          hub,
+          angle: hub ? 0 : random() * Math.PI * 2,
+          radius: hub ? 0 : 0.3 + random() * 0.7,
+          x: width / 2,
+          y: height / 2,
+          z: 0,
+          targetX: width / 2,
+          targetY: height / 2,
+          targetZ: 0,
+          attractionX: 0,
+          attractionY: 0,
+          amber: !hub && random() < 0.14,
           phase: random() * Math.PI * 2,
-          size: 1 + random() * 1.6,
+          size: hub ? 3.2 : 1 + random() * 1.5,
           introAlpha: 0,
           introBegin: 0,
           mobileVisible: true,
           seedNode: false,
         });
+        if (hub) engine.hubIndexes.set(cluster, id);
       }
 
-      for (let index = 0; index < count; index += 1) {
-        addEdge(start + index, start + ((index + 1 + Math.floor(random() * 2)) % count));
-        if (random() < 0.5) addEdge(start + index, start + Math.floor(random() * count));
+      for (let index = 1; index < count; index += 1) {
+        addEdge(start, start + index);
+        addEdge(
+          start + index,
+          start + 1 + (index % Math.max(1, count - 1)),
+        );
+        if (index > 2 && random() < 0.42) {
+          addEdge(start + index, start + 1 + Math.floor(random() * (count - 1)));
+        }
       }
     });
 
     routes.forEach(([from, to]) => {
-      const fromIndex = engine.nodes.findIndex((node) => node.cluster === from);
-      const toIndex = engine.nodes.findIndex((node) => node.cluster === to);
-      if (fromIndex >= 0 && toIndex >= 0) addEdge(fromIndex, toIndex);
+      const first = engine.hubIndexes.get(from);
+      const second = engine.hubIndexes.get(to);
+      if (first !== undefined && second !== undefined) addEdge(first, second, true);
     });
 
     engine.layout = (immediate) => {
+      const clusterRadii = new Map<PageSlug, number>();
+      pageSlugs.forEach((slug) => {
+        clusterRadii.set(
+          slug,
+          Math.min(width, height) * (slug === "home" ? 0.095 : 0.055),
+        );
+      });
       engine.nodes.forEach((node) => {
-        const point = anchor(node.cluster, engine.active);
-        node.targetX = point.x + Math.cos(node.angle) * point.radius * node.radius;
-        node.targetY = point.y + Math.sin(node.angle) * point.radius * node.radius;
+        const anchor = anchorPosition(node.cluster, width, height);
+        const radius = clusterRadii.get(node.cluster) ?? 40;
+        node.targetX = anchor.x + Math.cos(node.angle) * radius * node.radius;
+        node.targetY =
+          anchor.y + Math.sin(node.angle) * radius * node.radius * 0.72;
+        node.targetZ =
+          anchor.z +
+          (node.hub ? 0 : Math.sin(node.angle * 1.7 + node.phase) * radius * 0.9);
         if (immediate) {
           node.x = node.targetX;
           node.y = node.targetY;
+          node.z = node.targetZ;
         }
       });
     };
 
-    const clusterAlpha = (cluster: PageSlug) => {
-      if (cluster === engine.active) return 1;
-      return engine.visited.has(cluster) ? 0.45 : 0.16;
+    const project = (
+      x: number,
+      y: number,
+      z: number,
+      yaw: number,
+      pitch: number,
+      zoom: number,
+    ): ProjectedNode => {
+      const centerX = width / 2;
+      const centerY = height * 0.46;
+      const relativeX = x - centerX;
+      const relativeY = y - centerY;
+      const rotatedX = relativeX * Math.cos(yaw) - z * Math.sin(yaw);
+      const rotatedZ = relativeX * Math.sin(yaw) + z * Math.cos(yaw);
+      const rotatedY = relativeY * Math.cos(pitch) - rotatedZ * Math.sin(pitch);
+      const finalZ = relativeY * Math.sin(pitch) + rotatedZ * Math.cos(pitch);
+      const perspective = Math.max(680, Math.min(width, height) * 1.25);
+      const scale = clamp(perspective / (perspective + finalZ), 0.66, 1.42);
+      return {
+        x: centerX + rotatedX * scale * zoom,
+        y: centerY + rotatedY * scale * zoom,
+        scale,
+        depth: clamp((scale - 0.66) / 0.76),
+      };
     };
 
-    const pointX = (node: NodePoint) => node.x + node.offsetX + node.breatheX;
-    const pointY = (node: NodePoint) => node.y + node.offsetY + node.breatheY;
-
-    engine.draw = () => {
-      drawingContext.clearRect(0, 0, window.innerWidth, window.innerHeight);
-      engine.edges.forEach(([firstIndex, secondIndex]) => {
-        const first = engine.nodes[firstIndex];
-        const second = engine.nodes[secondIndex];
-        if (!first || !second) return;
-        const alpha =
-          Math.min(clusterAlpha(first.cluster), clusterAlpha(second.cluster)) *
-          (first.cluster === second.cluster ? 0.22 : 0.3);
-        drawingContext.strokeStyle = `rgba(142,196,214,${alpha})`;
-        drawingContext.lineWidth = 0.7;
-        drawingContext.beginPath();
-        drawingContext.moveTo(pointX(first), pointY(first));
-        drawingContext.lineTo(pointX(second), pointY(second));
-        drawingContext.stroke();
+    const updateLabels = () => {
+      pageSlugs.forEach((slug) => {
+        const link = linkRefs.current[slug];
+        const hubIndex = engine.hubIndexes.get(slug);
+        const hub = hubIndex === undefined ? undefined : engine.projected.get(hubIndex);
+        if (!link || !hub) return;
+        const targetX = clamp(hub.x, 62, width - 62);
+        const targetY = clamp(hub.y + 18 * hub.scale, 48, height - 74);
+        let motion = labelMotionRef.current[slug];
+        if (!motion) {
+          motion = { x: targetX, y: targetY, vx: 0, vy: 0 };
+          labelMotionRef.current[slug] = motion;
+        }
+        const spring = engine.reduced ? 1 : 0.115;
+        const damping = engine.reduced ? 0 : 0.72;
+        motion.vx = (motion.vx + (targetX - motion.x) * spring) * damping;
+        motion.vy = (motion.vy + (targetY - motion.y) * spring) * damping;
+        motion.x += engine.reduced ? targetX - motion.x : motion.vx;
+        motion.y += engine.reduced ? targetY - motion.y : motion.vy;
+        const labelScale = clamp(0.86 + hub.depth * 0.2, 0.84, 1.08);
+        link.style.transform = `translate3d(${motion.x}px, ${motion.y}px, 0) translate(-50%, 0) scale(${labelScale})`;
+        link.style.zIndex = `${Math.round(10 + hub.depth * 20)}`;
       });
+    };
+
+    const updateHoverTarget = () => {
+      if (!engine.pointer.active || engine.navigatorOpen) {
+        engine.hoveredEdge = null;
+        if (!engine.navigatorOpen) engine.hoveredCluster = null;
+        return;
+      }
+      let closestNode: SceneNode | null = null;
+      let closestNodeDistance = 18;
+      for (const node of engine.nodes) {
+        const point = engine.projected.get(node.id);
+        if (!point) continue;
+        const distance = Math.hypot(
+          point.x - engine.pointer.x,
+          point.y - engine.pointer.y,
+        );
+        if (distance < closestNodeDistance) {
+          closestNode = node;
+          closestNodeDistance = distance;
+        }
+      }
+      if (closestNode) {
+        engine.hoveredCluster = closestNode.cluster;
+        engine.hoveredEdge = null;
+        return;
+      }
+      engine.hoveredCluster = null;
+      let closestEdge: number | null = null;
+      let closestEdgeDistance = 6;
+      engine.edges.forEach((edge, index) => {
+        const first = engine.projected.get(edge.first);
+        const second = engine.projected.get(edge.second);
+        if (!first || !second) return;
+        const distance = distanceToSegment(
+          engine.pointer.x,
+          engine.pointer.y,
+          first.x,
+          first.y,
+          second.x,
+          second.y,
+        );
+        if (distance < closestEdgeDistance) {
+          closestEdge = index;
+          closestEdgeDistance = distance;
+        }
+      });
+      engine.hoveredEdge = closestEdge;
+    };
+
+    const drawScene = (time = performance.now()) => {
+      const targetProgress = engine.navigatorOpen ? 1 : 0;
+      engine.navigatorProgress = engine.reduced
+        ? targetProgress
+        : engine.navigatorProgress +
+          (targetProgress - engine.navigatorProgress) * 0.075;
+      const progress = engine.navigatorProgress;
+      const sceneMotionProgress = engine.reduced
+        ? 0
+        : sceneMotionStartedAt === null
+          ? 1
+          : smoothStep((time - sceneMotionStartedAt) / 1200);
+
+      if (!engine.dragging && !engine.reduced) {
+        engine.camera.yaw += engine.camera.velocityYaw;
+        engine.camera.pitch += engine.camera.velocityPitch;
+        engine.camera.velocityYaw *= 0.94;
+        engine.camera.velocityPitch *= 0.9;
+      }
+      engine.camera.pitch = clamp(engine.camera.pitch, -0.68, 0.68);
+      const autoYaw = engine.reduced
+        ? 0
+        : Math.sin(time * 0.000055) *
+          0.105 *
+          (1 - progress) *
+          sceneMotionProgress;
+      const autoPitch = engine.reduced
+        ? 0
+        : Math.cos(time * 0.000047) *
+          0.055 *
+          (1 - progress) *
+          sceneMotionProgress;
+      const yaw = engine.camera.yaw + autoYaw;
+      const pitch = engine.camera.pitch + autoPitch;
+      const zoom = 1 + progress * 0.09;
 
       engine.nodes.forEach((node) => {
-        const alpha = clusterAlpha(node.cluster);
-        drawingContext.fillStyle = node.amber
-          ? `rgba(216,163,95,${0.85 * alpha})`
-          : `rgba(180,214,226,${0.8 * alpha})`;
-        drawingContext.beginPath();
-        drawingContext.arc(
-          pointX(node),
-          pointY(node),
-          node.size * (node.cluster === engine.active ? 1.3 : 1),
-          0,
-          Math.PI * 2,
+        const settle = engine.reduced ? 1 : 0.055;
+        node.x += (node.targetX - node.x) * settle;
+        node.y += (node.targetY - node.y) * settle;
+        node.z += (node.targetZ - node.z) * settle;
+        const seconds = time / 1000;
+        const motion = sceneMotionProgress;
+        const floatStrength = (2.2 + progress * 2.8) * motion;
+        const projected = project(
+          node.x + Math.sin(seconds * 0.19 + node.phase) * floatStrength,
+          node.y + Math.cos(seconds * 0.16 + node.phase) * floatStrength,
+          node.z + Math.sin(seconds * 0.14 + node.phase * 1.3) * 14 * motion,
+          yaw,
+          pitch,
+          zoom,
         );
-        drawingContext.fill();
-        if (alpha > 0.4 && node.size > 2) {
-          drawingContext.fillStyle = node.amber
-            ? `rgba(216,163,95,${0.1 * alpha})`
-            : `rgba(142,196,214,${0.1 * alpha})`;
-          drawingContext.beginPath();
-          drawingContext.arc(pointX(node), pointY(node), node.size * 5, 0, Math.PI * 2);
-          drawingContext.fill();
+        const distance = Math.hypot(
+          engine.pointer.x - projected.x,
+          engine.pointer.y - projected.y,
+        );
+        const radius = progress > 0.1 ? 300 : 155;
+        const falloff =
+          engine.pointer.active && distance < radius
+            ? Math.pow(1 - distance / radius, 2)
+            : 0;
+        const attraction = (0.035 + progress * 0.16) * falloff;
+        const targetAttractionX =
+          (engine.pointer.x - projected.x) * attraction;
+        const targetAttractionY =
+          (engine.pointer.y - projected.y) * attraction;
+        const attractionEase = engine.reduced ? 1 : 0.12;
+        node.attractionX +=
+          (targetAttractionX - node.attractionX) * attractionEase;
+        node.attractionY +=
+          (targetAttractionY - node.attractionY) * attractionEase;
+        engine.projected.set(node.id, {
+          ...projected,
+          x: projected.x + node.attractionX,
+          y: projected.y + node.attractionY,
+        });
+      });
+
+      updateHoverTarget();
+      context.clearRect(0, 0, width, height);
+      const baseAlpha = 0.11 + progress * 0.34;
+      engine.edges.forEach((edge, edgeIndex) => {
+        const first = engine.projected.get(edge.first);
+        const second = engine.projected.get(edge.second);
+        if (!first || !second) return;
+        const firstNode = engine.nodes[edge.first];
+        const secondNode = engine.nodes[edge.second];
+        const activeEdge =
+          firstNode.cluster === engine.active ||
+          secondNode.cluster === engine.active;
+        const hovered =
+          edgeIndex === engine.hoveredEdge ||
+          firstNode.cluster === engine.hoveredCluster ||
+          secondNode.cluster === engine.hoveredCluster;
+        const visitedEdge =
+          engine.visited.has(firstNode.cluster) &&
+          engine.visited.has(secondNode.cluster);
+        const alphaMultiplier = hovered
+          ? 1.9
+          : activeEdge
+            ? 1.35
+            : visitedEdge
+              ? 1.08
+              : 0.7;
+        const alpha = baseAlpha * alphaMultiplier * (edge.route ? 1 : 0.62);
+        const gradient = context.createLinearGradient(
+          first.x,
+          first.y,
+          second.x,
+          second.y,
+        );
+        gradient.addColorStop(0, `rgba(142,196,214,${alpha})`);
+        gradient.addColorStop(
+          1,
+          `rgba(216,163,95,${alpha * (edge.route ? 0.78 : 0.42)})`,
+        );
+        if (hovered || (progress > 0.45 && activeEdge && edge.route)) {
+          context.strokeStyle = `rgba(142,196,214,${alpha * 0.13})`;
+          context.lineWidth = edge.route ? 6 : 4;
+          context.beginPath();
+          context.moveTo(first.x, first.y);
+          context.lineTo(second.x, second.y);
+          context.stroke();
+        }
+        context.strokeStyle = gradient;
+        context.lineWidth = edge.route ? 0.85 + progress * 0.45 : 0.55;
+        context.beginPath();
+        context.moveTo(first.x, first.y);
+        context.lineTo(second.x, second.y);
+        context.stroke();
+
+        if (!engine.reduced && edge.route && (activeEdge || hovered || progress > 0.8)) {
+          const pulseProgress = (time * 0.00012 + edgeIndex * 0.13) % 1;
+          context.fillStyle = hovered
+            ? "rgba(233,229,220,.9)"
+            : "rgba(183,221,233,.72)";
+          context.beginPath();
+          context.arc(
+            first.x + (second.x - first.x) * pulseProgress,
+            first.y + (second.y - first.y) * pulseProgress,
+            1.2 + progress * 0.8,
+            0,
+            Math.PI * 2,
+          );
+          context.fill();
+        }
+      });
+
+      const sortedNodes = [...engine.nodes].sort((first, second) => {
+        const firstDepth = engine.projected.get(first.id)?.scale ?? 1;
+        const secondDepth = engine.projected.get(second.id)?.scale ?? 1;
+        return firstDepth - secondDepth;
+      });
+      sortedNodes.forEach((node) => {
+        const point = engine.projected.get(node.id);
+        if (!point) return;
+        const activeNode = node.cluster === engine.active;
+        const hovered = node.cluster === engine.hoveredCluster;
+        const visitedNode = engine.visited.has(node.cluster);
+        const hubBoost = node.hub ? 1.45 + progress * 0.35 : 1;
+        const radius =
+          node.size * point.scale * hubBoost * (hovered ? 1.28 : 1);
+        const alpha =
+          (0.26 + progress * 0.5) *
+          (hovered ? 1.25 : activeNode ? 1.1 : visitedNode ? 0.9 : 0.68);
+        if (node.hub || hovered || (activeNode && node.size > 1.8)) {
+          context.fillStyle = node.amber
+            ? `rgba(216,163,95,${alpha * 0.12})`
+            : `rgba(142,196,214,${alpha * (node.hub ? 0.16 : 0.09)})`;
+          context.beginPath();
+          context.arc(point.x, point.y, radius * (node.hub ? 5.2 : 3.8), 0, Math.PI * 2);
+          context.fill();
+        }
+        context.fillStyle = node.amber
+          ? `rgba(216,163,95,${Math.min(0.98, alpha)})`
+          : `rgba(183,221,233,${Math.min(0.98, alpha)})`;
+        context.beginPath();
+        context.arc(point.x, point.y, radius, 0, Math.PI * 2);
+        context.fill();
+        if (node.hub && (activeNode || hovered || progress > 0.6)) {
+          context.strokeStyle = hovered
+            ? "rgba(216,163,95,.72)"
+            : "rgba(183,221,233,.58)";
+          context.lineWidth = 0.8;
+          context.beginPath();
+          context.arc(point.x, point.y, radius + 4 + progress * 2, 0, Math.PI * 2);
+          context.stroke();
         }
       });
 
       if (engine.pulse) {
-        const from = anchor(engine.pulse.from, engine.active);
-        const to = anchor(engine.pulse.to, engine.active);
-        const progress = engine.pulse.progress;
-        const x = from.x + (to.x - from.x) * progress;
-        const y = from.y + (to.y - from.y) * progress;
-        drawingContext.strokeStyle = `rgba(142,196,214,${0.35 * (1 - progress)})`;
-        drawingContext.lineWidth = 1;
-        drawingContext.beginPath();
-        drawingContext.moveTo(from.x, from.y);
-        drawingContext.lineTo(x, y);
-        drawingContext.stroke();
-        drawingContext.fillStyle = "rgba(200,235,245,.9)";
-        drawingContext.beginPath();
-        drawingContext.arc(x, y, 2.6, 0, Math.PI * 2);
-        drawingContext.fill();
+        const fromIndex = engine.hubIndexes.get(engine.pulse.from);
+        const toIndex = engine.hubIndexes.get(engine.pulse.to);
+        const from = fromIndex === undefined ? undefined : engine.projected.get(fromIndex);
+        const to = toIndex === undefined ? undefined : engine.projected.get(toIndex);
+        if (from && to) {
+          const pulseProgress = engine.pulse.progress;
+          const pulseX = from.x + (to.x - from.x) * pulseProgress;
+          const pulseY = from.y + (to.y - from.y) * pulseProgress;
+          context.fillStyle = `rgba(233,229,220,${1 - pulseProgress})`;
+          context.beginPath();
+          context.arc(pulseX, pulseY, 2.8, 0, Math.PI * 2);
+          context.fill();
+          engine.pulse.progress += 0.022;
+          if (engine.pulse.progress > 1) engine.pulse = null;
+        }
       }
+      updateLabels();
     };
 
+    engine.draw = drawScene;
+
     const prepareIntro = () => {
-      const scale = window.innerWidth < 640 ? 0.78 : 1;
-      introTimings = [0, 0.45, 0.95, 1.7, 2.75, 3.55, 4.35, 5.3].map((time) => time * scale);
-      const byCluster = {} as Record<PageSlug, NodePoint[]>;
+      const scale = width < 640 ? 0.78 : 1;
+      introTimings = [0, 0.45, 0.95, 1.7, 2.75, 3.55, 4.35, 5.3].map(
+        (time) => time * scale,
+      );
+      const byCluster = {} as Record<PageSlug, SceneNode[]>;
       pageSlugs.forEach((slug) => {
         byCluster[slug] = [];
       });
@@ -372,8 +787,11 @@ export function LatticeCanvas({
         const [start, end] = order[cluster];
         nodes.forEach((node, index) => {
           node.introBegin =
-            (start + (end - start) * (index / Math.max(nodes.length - 1, 1)) + introRandom() * 0.05) * scale;
-          node.mobileVisible = index < Math.ceil(nodes.length * 0.55);
+            (start +
+              (end - start) * (index / Math.max(nodes.length - 1, 1)) +
+              introRandom() * 0.05) *
+            scale;
+          node.mobileVisible = index < Math.ceil(nodes.length * 0.62);
         });
       });
 
@@ -390,21 +808,23 @@ export function LatticeCanvas({
         introHomeSecond.mobileVisible = true;
       }
 
-      const workflowNode = byCluster.workflows[1] ?? byCluster.workflows[0] ?? introHomeSeed;
-      if (workflowNode) workflowNode.amberWindow = [1.9 * scale, 2.62 * scale];
+      const workflowNode = byCluster.workflows[1] ?? byCluster.workflows[0];
+      if (workflowNode) {
+        workflowNode.amberWindow = [1.9 * scale, 2.62 * scale];
+      }
 
       introPruneEdges = [];
       for (let index = 0; index < 9; index += 1) {
-        const firstCluster = pageSlugs[Math.floor(introRandom() * pageSlugs.length)];
-        const secondCluster = pageSlugs[Math.floor(introRandom() * pageSlugs.length)];
+        const firstCluster =
+          pageSlugs[Math.floor(introRandom() * pageSlugs.length)];
+        const secondCluster =
+          pageSlugs[Math.floor(introRandom() * pageSlugs.length)];
         if (firstCluster === secondCluster) continue;
         const firstNodes = byCluster[firstCluster];
         const secondNodes = byCluster[secondCluster];
-        const first = firstNodes[Math.floor(introRandom() * firstNodes.length)];
-        const second = secondNodes[Math.floor(introRandom() * secondNodes.length)];
         introPruneEdges.push({
-          first,
-          second,
+          first: firstNodes[Math.floor(introRandom() * firstNodes.length)],
+          second: secondNodes[Math.floor(introRandom() * secondNodes.length)],
           startsAt: (1.74 + introRandom() * 0.4) * scale,
           endsAt: (2.28 + introRandom() * 0.42) * scale,
           amber: index === 2,
@@ -413,10 +833,14 @@ export function LatticeCanvas({
     };
 
     const introAnchorPosition = (cluster: PageSlug, elapsed: number) => {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      const [mapX, mapY] = introMapPositions[cluster];
-      const spread = 0.42 + 0.58 * smoothStep((elapsed - introTimings[3]) / (introTimings[4] - introTimings[3] + 0.4));
+      const [mapX, mapY] = mapPositions[cluster];
+      const spread =
+        0.42 +
+        0.58 *
+          smoothStep(
+            (elapsed - introTimings[3]) /
+              (introTimings[4] - introTimings[3] + 0.4),
+          );
       const mobile = width < 640;
       const factorX = mobile ? 0.92 : 0.86;
       const factorY = mobile ? 1.02 : 0.92;
@@ -426,9 +850,10 @@ export function LatticeCanvas({
       };
     };
 
-    const introNodePosition = (node: NodePoint, elapsed: number) => {
+    const introNodePosition = (node: SceneNode, elapsed: number) => {
       const point = introAnchorPosition(node.cluster, elapsed);
-      const clusterRadius = Math.min(window.innerWidth, window.innerHeight) * (node.cluster === "home" ? 0.1 : 0.06);
+      const clusterRadius =
+        Math.min(width, height) * (node.cluster === "home" ? 0.1 : 0.06);
       const emergence = smoothStep((elapsed - (node.introBegin - 0.05)) / 0.6);
       const parent = introParents[node.cluster];
       let baseX = point.x;
@@ -438,80 +863,92 @@ export function LatticeCanvas({
         baseX = parentPoint.x + (point.x - parentPoint.x) * emergence;
         baseY = parentPoint.y + (point.y - parentPoint.y) * emergence;
       }
-      let x = baseX + Math.cos(node.angle) * clusterRadius * node.radius * (0.3 + 0.7 * emergence);
-      let y = baseY + Math.sin(node.angle) * clusterRadius * node.radius * (0.3 + 0.7 * emergence);
-      const handoff = travelStep((elapsed - introTimings[6]) / (introTimings[7] - introTimings[6]));
+      let x =
+        baseX +
+        Math.cos(node.angle) * clusterRadius * node.radius * (0.3 + 0.7 * emergence);
+      let y =
+        baseY +
+        Math.sin(node.angle) * clusterRadius * node.radius * (0.3 + 0.7 * emergence) * 0.72;
+      const handoff = travelStep(
+        (elapsed - introTimings[6]) / (introTimings[7] - introTimings[6]),
+      );
       if (handoff > 0) {
-        const finalAnchor = anchor(node.cluster, "home");
-        const finalX = finalAnchor.x + Math.cos(node.angle) * finalAnchor.radius * node.radius;
-        const finalY = finalAnchor.y + Math.sin(node.angle) * finalAnchor.radius * node.radius;
-        x += (finalX - x) * handoff;
-        y += (finalY - y) * handoff;
+        const target = project(
+          node.targetX,
+          node.targetY,
+          node.targetZ,
+          0,
+          0,
+          1,
+        );
+        x += (target.x - x) * handoff;
+        y += (target.y - y) * handoff;
       }
       return { x, y };
     };
 
     const drawIntro = (elapsed: number) => {
-      drawingContext.clearRect(0, 0, window.innerWidth, window.innerHeight);
-      const mobile = window.innerWidth < 640;
-      const handoff = travelStep((elapsed - introTimings[6]) / (introTimings[7] - introTimings[6]));
-
+      context.clearRect(0, 0, width, height);
+      const mobile = width < 640;
+      const handoff = travelStep(
+        (elapsed - introTimings[6]) / (introTimings[7] - introTimings[6]),
+      );
       engine.nodes.forEach((node) => {
         const position = introNodePosition(node, elapsed);
         node.x = position.x;
         node.y = position.y;
-        node.targetX = position.x;
-        node.targetY = position.y;
-        node.introAlpha = mobile && !node.mobileVisible ? 0 : clamp((elapsed - node.introBegin) / 0.3);
+        node.introAlpha = mobile && !node.mobileVisible
+          ? 0
+          : clamp((elapsed - node.introBegin) / 0.3);
       });
 
-      engine.edges.forEach(([firstIndex, secondIndex]) => {
-        const first = engine.nodes[firstIndex];
-        const second = engine.nodes[secondIndex];
-        if (!first || !second) return;
+      const drawIntroEdge = (
+        first: SceneNode,
+        second: SceneNode,
+        amber: boolean,
+        alphaMultiplier = 1,
+      ) => {
         const edgeBegins = Math.max(first.introBegin, second.introBegin) + 0.12;
-        const growth = clamp((elapsed - edgeBegins) / 0.38);
+        const growth = clamp((elapsed - edgeBegins) / 0.35);
         if (growth <= 0 || first.introAlpha <= 0 || second.introAlpha <= 0) return;
-        const pageAlpha = Math.min(clusterAlpha(first.cluster), clusterAlpha(second.cluster));
-        const ambientMix = 1 + (pageAlpha - 1) * handoff;
         const alpha =
-          (first.cluster === second.cluster ? 0.24 : 0.32) *
+          growth *
           Math.min(first.introAlpha, second.introAlpha) *
-          ambientMix *
-          (1.3 - 0.3 * handoff) *
-          growth;
+          alphaMultiplier *
+          (1 - handoff * 0.55);
         const endX = first.x + (second.x - first.x) * growth;
         const endY = first.y + (second.y - first.y) * growth;
-        drawingContext.strokeStyle = `rgba(142,196,214,${alpha})`;
-        drawingContext.lineWidth = 0.7;
-        drawingContext.beginPath();
-        drawingContext.moveTo(first.x, first.y);
-        drawingContext.lineTo(endX, endY);
-        drawingContext.stroke();
-        if (growth < 1) {
-          drawingContext.fillStyle = "rgba(200,235,245,.85)";
-          drawingContext.beginPath();
-          drawingContext.arc(endX, endY, 1.6, 0, Math.PI * 2);
-          drawingContext.fill();
-        }
-      });
+        context.strokeStyle = amber
+          ? `rgba(216,163,95,${0.7 * alpha})`
+          : `rgba(142,196,214,${0.42 * alpha})`;
+        context.lineWidth = amber ? 1.2 : 0.75;
+        context.beginPath();
+        context.moveTo(first.x, first.y);
+        context.lineTo(endX, endY);
+        context.stroke();
+      };
 
+      engine.edges.forEach((edge) => {
+        const first = engine.nodes[edge.first];
+        const second = engine.nodes[edge.second];
+        if (!first || !second) return;
+        drawIntroEdge(first, second, first.amber || second.amber, edge.route ? 1.15 : 0.82);
+      });
       introPruneEdges.forEach((edge) => {
-        if (elapsed < edge.startsAt || elapsed > edge.endsAt + 0.05) return;
-        const fadeIn = clamp((elapsed - edge.startsAt) / 0.22);
-        const fadeOut = 1 - clamp((elapsed - (edge.endsAt - 0.3)) / 0.3);
-        const alpha = Math.min(fadeIn, fadeOut) * Math.min(edge.first.introAlpha, edge.second.introAlpha);
+        const fadeIn = clamp((elapsed - edge.startsAt) / 0.18);
+        const fadeOut = 1 - clamp((elapsed - edge.endsAt) / 0.24);
+        const alpha =
+          Math.min(fadeIn, fadeOut) *
+          Math.min(edge.first.introAlpha, edge.second.introAlpha);
         if (alpha <= 0) return;
-        drawingContext.strokeStyle = edge.amber
-          ? `rgba(216,163,95,${0.3 * alpha})`
-          : `rgba(142,196,214,${0.2 * alpha})`;
-        drawingContext.lineWidth = 0.6;
-        drawingContext.setLineDash([3, 4]);
-        drawingContext.beginPath();
-        drawingContext.moveTo(edge.first.x, edge.first.y);
-        drawingContext.lineTo(edge.second.x, edge.second.y);
-        drawingContext.stroke();
-        drawingContext.setLineDash([]);
+        context.strokeStyle = edge.amber
+          ? `rgba(216,163,95,${0.65 * alpha})`
+          : `rgba(142,196,214,${0.26 * alpha})`;
+        context.lineWidth = 0.8;
+        context.beginPath();
+        context.moveTo(edge.first.x, edge.first.y);
+        context.lineTo(edge.second.x, edge.second.y);
+        context.stroke();
       });
 
       if (
@@ -522,67 +959,68 @@ export function LatticeCanvas({
         elapsed < introTimings[2] + 0.05
       ) {
         const progress = clamp(
-          (elapsed - (introTimings[1] + 0.12)) / (introTimings[2] - introTimings[1] - 0.08),
+          (elapsed - (introTimings[1] + 0.12)) /
+            (introTimings[2] - introTimings[1] - 0.08),
         );
-        const target = introNodePosition(introHomeSecond, introTimings[2] + 0.1);
+        const target = introNodePosition(
+          introHomeSecond,
+          introTimings[2] + 0.1,
+        );
         const x = introHomeSeed.x + (target.x - introHomeSeed.x) * progress;
         const y = introHomeSeed.y + (target.y - introHomeSeed.y) * progress;
-        drawingContext.strokeStyle = `rgba(142,196,214,${0.3 * (1 - progress)})`;
-        drawingContext.lineWidth = 0.7;
-        drawingContext.beginPath();
-        drawingContext.moveTo(introHomeSeed.x, introHomeSeed.y);
-        drawingContext.lineTo(x, y);
-        drawingContext.stroke();
-        drawingContext.fillStyle = "rgba(200,235,245,.9)";
-        drawingContext.beginPath();
-        drawingContext.arc(x, y, 1.8, 0, Math.PI * 2);
-        drawingContext.fill();
+        context.strokeStyle = `rgba(183,221,233,${0.65 * (1 - progress * 0.3)})`;
+        context.lineWidth = 1;
+        context.beginPath();
+        context.moveTo(introHomeSeed.x, introHomeSeed.y);
+        context.lineTo(x, y);
+        context.stroke();
       }
 
       engine.nodes.forEach((node) => {
         if (node.introAlpha <= 0) return;
-        const pageAlpha = clusterAlpha(node.cluster);
-        const alpha = node.introAlpha * (1 + (pageAlpha - 1) * handoff);
-        let colour = `rgba(180,214,226,${0.8 * alpha})`;
-        let halo: string | null = null;
-        if (node.amberWindow) {
-          if (elapsed >= node.amberWindow[0] && elapsed < node.amberWindow[1]) {
-            colour = `rgba(216,163,95,${(0.55 + 0.3 * Math.sin(elapsed * 7)) * alpha})`;
-            halo = `rgba(216,163,95,${0.12 * alpha})`;
-          } else if (elapsed >= node.amberWindow[1] && elapsed < node.amberWindow[1] + 0.4) {
-            colour = `rgba(183,221,233,${0.9 * alpha})`;
-            halo = `rgba(142,196,214,${0.14 * alpha})`;
-          }
-        } else if (node.amber && elapsed > introTimings[4]) {
-          colour = `rgba(216,163,95,${0.85 * alpha})`;
-        }
-        const size = node.size * (node.cluster === "home" ? 1.28 : 1);
-        drawingContext.fillStyle = colour;
-        drawingContext.beginPath();
-        drawingContext.arc(node.x, node.y, size, 0, Math.PI * 2);
-        drawingContext.fill();
+        const activeAmber =
+          node.amberWindow &&
+          elapsed >= node.amberWindow[0] &&
+          elapsed <= node.amberWindow[1];
+        const alpha = node.introAlpha * (1 - handoff * 0.18);
+        const size = node.size * (node.hub ? 1.22 : 1);
+        context.fillStyle = activeAmber || node.amber
+          ? `rgba(216,163,95,${0.9 * alpha})`
+          : `rgba(183,221,233,${0.82 * alpha})`;
+        context.beginPath();
+        context.arc(node.x, node.y, size, 0, Math.PI * 2);
+        context.fill();
         if (node.seedNode && elapsed < introTimings[3]) {
           const bloom =
             clamp((elapsed - node.introBegin) / 0.35) *
-            (1 - 0.55 * clamp((elapsed - introTimings[2]) / (introTimings[3] - introTimings[2])));
-          drawingContext.fillStyle = `rgba(142,196,214,${0.16 * bloom})`;
-          drawingContext.beginPath();
-          drawingContext.arc(node.x, node.y, 14, 0, Math.PI * 2);
-          drawingContext.fill();
-        } else if (halo || (alpha > 0.5 && node.size > 2.1)) {
-          drawingContext.fillStyle = halo ?? `rgba(142,196,214,${0.09 * alpha})`;
-          drawingContext.beginPath();
-          drawingContext.arc(node.x, node.y, size * 4.5, 0, Math.PI * 2);
-          drawingContext.fill();
+            (1 -
+              0.55 *
+                clamp(
+                  (elapsed - introTimings[2]) /
+                    (introTimings[3] - introTimings[2]),
+                ));
+          context.fillStyle = `rgba(142,196,214,${0.16 * bloom})`;
+          context.beginPath();
+          context.arc(node.x, node.y, 14, 0, Math.PI * 2);
+          context.fill();
+        } else if (activeAmber || node.hub) {
+          context.fillStyle = activeAmber
+            ? `rgba(216,163,95,${0.12 * alpha})`
+            : `rgba(142,196,214,${0.08 * alpha})`;
+          context.beginPath();
+          context.arc(node.x, node.y, size * 4.5, 0, Math.PI * 2);
+          context.fill();
         }
       });
 
       if (elapsed > introTimings[4] - 0.05 && handoff < 0.98) {
         const fontFamily =
-          window.getComputedStyle(document.documentElement).getPropertyValue("--font-mono").trim() ||
-          '"IBM Plex Mono"';
-        drawingContext.font = `10px ${fontFamily}, monospace`;
-        drawingContext.textAlign = "center";
+          window
+            .getComputedStyle(document.documentElement)
+            .getPropertyValue("--font-mono")
+            .trim() || '"IBM Plex Mono"';
+        context.font = `10px ${fontFamily}, monospace`;
+        context.textAlign = "center";
         pageSlugs.forEach((slug) => {
           if (slug === "home") return;
           const primary = primaryIntroLabels.has(slug);
@@ -593,18 +1031,17 @@ export function LatticeCanvas({
           alpha *= 1 - clamp((elapsed - introTimings[6]) / 0.5);
           if (alpha <= 0) return;
           const point = introAnchorPosition(slug, elapsed);
-          const radius = Math.min(window.innerWidth, window.innerHeight) * 0.06;
-          drawingContext.fillStyle = primary
+          const radius = Math.min(width, height) * 0.06;
+          context.fillStyle = primary
             ? `rgba(184,180,171,${alpha})`
             : `rgba(125,122,114,${alpha})`;
           const label = Array.from(initialLabelsRef.current[slug]).join(" ");
-          const halfLabelWidth = drawingContext.measureText(label).width / 2;
-          const labelX = clamp(
-            point.x,
-            halfLabelWidth + 8,
-            window.innerWidth - halfLabelWidth - 8,
+          const halfLabelWidth = context.measureText(label).width / 2;
+          context.fillText(
+            label,
+            clamp(point.x, halfLabelWidth + 8, width - halfLabelWidth - 8),
+            point.y + radius + 20,
           );
-          drawingContext.fillText(label, labelX, point.y + radius + 20);
         });
       }
     };
@@ -617,10 +1054,19 @@ export function LatticeCanvas({
       }
     };
 
+    const settleAtScene = () => {
+      engine.nodes.forEach((node) => {
+        node.x = node.targetX;
+        node.y = node.targetY;
+        node.z = node.targetZ;
+      });
+    };
+
     const finishIntro = () => {
       introActive = false;
       introElapsed = introTimings[7] ?? 5.3;
-      engine.layout(false);
+      settleAtScene();
+      sceneMotionStartedAt = performance.now();
       callbacksRef.current.onIntroComplete();
     };
 
@@ -628,8 +1074,9 @@ export function LatticeCanvas({
       if (!introActive) return;
       introActive = false;
       introElapsed = introTimings[7] ?? 5.3;
-      engine.layout(true);
-      engine.draw();
+      settleAtScene();
+      sceneMotionStartedAt = performance.now();
+      drawScene(performance.now());
       callbacksRef.current.onIntroComplete();
     };
 
@@ -647,7 +1094,8 @@ export function LatticeCanvas({
     const animate = (time: number) => {
       if (introActive) {
         const now = time / 1000;
-        const delta = introLastTime === null ? 0.016 : Math.min(now - introLastTime, 0.05);
+        const delta =
+          introLastTime === null ? 0.016 : Math.min(now - introLastTime, 0.05);
         introLastTime = now;
         introElapsed = Math.min(introElapsed + delta, introTimings[7]);
         drawIntro(introElapsed);
@@ -661,24 +1109,7 @@ export function LatticeCanvas({
         }
         if (introElapsed >= introTimings[7]) finishIntro();
       } else {
-        engine.nodes.forEach((node) => {
-          node.x += (node.targetX - node.x) * 0.055;
-          node.y += (node.targetY - node.y) * 0.055;
-          const deltaX = node.x - pointer.x;
-          const deltaY = node.y - pointer.y;
-          const distance = Math.hypot(deltaX, deltaY);
-          const push = distance > 0 && distance < 150 ? ((150 - distance) * 0.1) / distance : 0;
-          node.offsetX = deltaX * push;
-          node.offsetY = deltaY * push;
-          const seconds = time / 1000;
-          node.breatheX = Math.sin(seconds * 0.4 + node.phase) * 3;
-          node.breatheY = Math.cos(seconds * 0.33 + node.phase) * 3;
-        });
-        if (engine.pulse) {
-          engine.pulse.progress += 0.022;
-          if (engine.pulse.progress > 1) engine.pulse = null;
-        }
-        engine.draw();
+        drawScene(time);
       }
       frame = window.requestAnimationFrame(animate);
     };
@@ -706,23 +1137,33 @@ export function LatticeCanvas({
 
     const onResume = () => {
       pausedByOverlay = false;
-      engine.draw();
+      drawScene(performance.now());
       startAnimation();
     };
 
     const onPointerMove = (event: PointerEvent) => {
-      pointer.x = event.clientX;
-      pointer.y = event.clientY;
+      if (engine.navigatorOpen) return;
+      engine.pointer.x = event.clientX;
+      engine.pointer.y = event.clientY;
+      engine.pointer.active = true;
+      if (engine.reduced) drawScene(performance.now());
+    };
+
+    const onPointerLeave = () => {
+      if (engine.navigatorOpen) return;
+      engine.pointer.active = false;
+      if (engine.reduced) drawScene(performance.now());
     };
 
     const onResize = () => {
       sizeCanvas();
+      engine.layout(!introActive);
+      labelMotionRef.current = {};
       if (introActive) {
         prepareIntro();
         drawIntro(introElapsed);
       } else {
-        engine.layout(true);
-        engine.draw();
+        drawScene(performance.now());
       }
     };
 
@@ -732,15 +1173,15 @@ export function LatticeCanvas({
 
     const shouldPlayIntro =
       initialIntroEnabledRef.current && !engine.reduced && introWillPlay();
-
     if (shouldPlayIntro) startIntro();
     else {
       callbacksRef.current.onIntroComplete();
-      if (engine.reduced) engine.draw();
+      drawScene(performance.now());
     }
-    if (!engine.reduced) startAnimation();
+    startAnimation();
 
     document.addEventListener("visibilitychange", onVisibilityChange);
+    document.documentElement.addEventListener("pointerleave", onPointerLeave);
     window.addEventListener("lattice:pause", onPause);
     window.addEventListener("lattice:resume", onResume);
     window.addEventListener("pointermove", onPointerMove, { passive: true });
@@ -749,6 +1190,7 @@ export function LatticeCanvas({
     return () => {
       stopAnimation();
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      document.documentElement.removeEventListener("pointerleave", onPointerLeave);
       window.removeEventListener("lattice:pause", onPause);
       window.removeEventListener("lattice:resume", onResume);
       window.removeEventListener("pointermove", onPointerMove);
@@ -766,13 +1208,168 @@ export function LatticeCanvas({
     if (previous !== active && !engine.reduced) {
       engine.pulse = { from: previous, to: active, progress: 0 };
     }
-    engine.layout(engine.reduced);
-    if (engine.reduced) engine.draw();
+    if (engine.reduced) engine.draw(performance.now());
   }, [active, visited]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.navigatorOpen = navigatorOpen;
+    engine.pointer.active = false;
+    engine.hoveredCluster = null;
+    engine.hoveredEdge = null;
+    if (!navigatorOpen) {
+      engine.dragging = null;
+      engine.suppressClick = false;
+    }
+    if (engine.reduced) engine.draw(performance.now());
+    if (!navigatorOpen) return;
+    const frameId = window.requestAnimationFrame(() => {
+      linkRefs.current[active]?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [active, navigatorOpen]);
 
   useEffect(() => {
     if (introSkipKey > 0) engineRef.current?.skipIntro();
   }, [introSkipKey]);
 
-  return <canvas aria-hidden="true" className="lattice-canvas" ref={canvasRef} />;
+  const redrawIfReduced = useCallback(() => {
+    const engine = engineRef.current;
+    if (engine?.reduced) engine.draw(performance.now());
+  }, []);
+
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const engine = engineRef.current;
+    if (!engine || !navigatorOpen || event.button !== 0) return;
+    if ((event.target as Element).closest("a, button")) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    engine.dragging = {
+      pointerId: event.pointerId,
+      lastX: event.clientX,
+      lastY: event.clientY,
+      moved: false,
+    };
+    engine.camera.velocityYaw = 0;
+    engine.camera.velocityPitch = 0;
+  };
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const engine = engineRef.current;
+    if (!engine || !navigatorOpen) return;
+    engine.pointer.x = event.clientX;
+    engine.pointer.y = event.clientY;
+    engine.pointer.active = true;
+    const drag = engine.dragging;
+    if (drag && drag.pointerId === event.pointerId) {
+      const deltaX = event.clientX - drag.lastX;
+      const deltaY = event.clientY - drag.lastY;
+      engine.camera.yaw += deltaX * 0.0052;
+      engine.camera.pitch = clamp(
+        engine.camera.pitch + deltaY * 0.0044,
+        -0.68,
+        0.68,
+      );
+      engine.camera.velocityYaw = deltaX * 0.00042;
+      engine.camera.velocityPitch = deltaY * 0.0003;
+      drag.lastX = event.clientX;
+      drag.lastY = event.clientY;
+      if (Math.abs(deltaX) + Math.abs(deltaY) > 3) drag.moved = true;
+    }
+    redrawIfReduced();
+  };
+
+  const finishDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const engine = engineRef.current;
+    if (!engine?.dragging || engine.dragging.pointerId !== event.pointerId) return;
+    if (engine.dragging.moved) {
+      engine.suppressClick = true;
+      window.setTimeout(() => {
+        if (engineRef.current === engine) engine.suppressClick = false;
+      }, 0);
+    }
+    engine.dragging = null;
+    redrawIfReduced();
+  };
+
+  return (
+    <div
+      className={`lattice-scene${navigatorOpen ? " lattice-scene--navigator" : ""}`}
+      onPointerCancel={finishDrag}
+      onPointerDown={handlePointerDown}
+      onPointerLeave={() => {
+        const engine = engineRef.current;
+        if (!engine || engine.dragging) return;
+        engine.pointer.active = false;
+        redrawIfReduced();
+      }}
+      onPointerMove={handlePointerMove}
+      onPointerUp={finishDrag}
+      ref={sceneRef}
+    >
+      <canvas aria-hidden="true" className="lattice-canvas" ref={canvasRef} />
+      {navigatorOpen ? (
+        <div
+          aria-label={navigatorLabel}
+          aria-modal="true"
+          className="lattice-navigation"
+          role="dialog"
+        >
+          <button
+            className="lattice-navigation__close"
+            onClick={onNavigatorClose}
+            type="button"
+          >
+            {closeLabel}
+          </button>
+          <nav aria-label={navigatorLabel} className="lattice-navigation__nodes" id="lattice-navigation">
+            {pageSlugs.map((slug) => (
+              <Link
+                aria-current={active === slug ? "page" : undefined}
+                className="lattice-node-link"
+                href={hrefFor(locale, slug)}
+                key={slug}
+                onBlur={() => {
+                  const engine = engineRef.current;
+                  if (engine?.hoveredCluster === slug) engine.hoveredCluster = null;
+                  redrawIfReduced();
+                }}
+                onClick={(event) => {
+                  const engine = engineRef.current;
+                  if (!engine?.suppressClick) return;
+                  event.preventDefault();
+                  engine.suppressClick = false;
+                }}
+                onFocus={() => {
+                  const engine = engineRef.current;
+                  if (engine) engine.hoveredCluster = slug;
+                  redrawIfReduced();
+                }}
+                onNavigate={onNavigatorNavigate}
+                onPointerEnter={() => {
+                  const engine = engineRef.current;
+                  if (engine) engine.hoveredCluster = slug;
+                  redrawIfReduced();
+                }}
+                onPointerLeave={() => {
+                  const engine = engineRef.current;
+                  if (engine?.hoveredCluster === slug && !engine.dragging) {
+                    engine.hoveredCluster = null;
+                  }
+                  redrawIfReduced();
+                }}
+                ref={(element) => {
+                  linkRefs.current[slug] = element;
+                }}
+              >
+                <span aria-hidden="true" className="lattice-node-link__dot" />
+                <span>{labels[slug]}</span>
+              </Link>
+            ))}
+          </nav>
+          <p className="lattice-navigation__hint">{navigatorHint}</p>
+        </div>
+      ) : null}
+    </div>
+  );
 }

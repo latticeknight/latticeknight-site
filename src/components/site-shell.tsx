@@ -6,7 +6,6 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Mo
 
 import { LatticeCanvas } from "@/components/lattice-canvas";
 import { LatticeIntro, type LatticeIntroStage } from "@/components/lattice-intro";
-import { MapGraph } from "@/components/map-graph";
 import { INTRO_SEEN_KEY } from "@/lib/intro-decision";
 import { hrefFor, pageSlugs, slugFromPathname, type Locale, type PageSlug, type SiteDictionary } from "@/lib/site";
 
@@ -46,7 +45,8 @@ export function SiteShell({
   );
   const [introStage, setIntroStage] = useState<LatticeIntroStage>(current === "home" ? "pending" : "complete");
   const [introSkipKey, setIntroSkipKey] = useState(0);
-  const mapDialogRef = useRef<HTMLDialogElement>(null);
+  const mapTriggerRef = useRef<HTMLButtonElement>(null);
+  const restoreMapFocusRef = useRef(false);
   const pendingPathRef = useRef<string | null>(null);
   const pendingStartedAtRef = useRef(0);
   const common = dictionary.common;
@@ -135,6 +135,7 @@ export function SiteShell({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setMenuOpen(false);
+        restoreMapFocusRef.current = mapOpen;
         setMapOpen(false);
       }
     };
@@ -148,13 +149,18 @@ export function SiteShell({
   }, [mapOpen, menuOpen]);
 
   useEffect(() => {
-    if (mapOpen && mapDialogRef.current && !mapDialogRef.current.open) {
-      mapDialogRef.current.showModal();
-    }
+    if (mapOpen || !restoreMapFocusRef.current) return;
+    mapTriggerRef.current?.focus({ preventScroll: true });
+    restoreMapFocusRef.current = false;
   }, [mapOpen]);
 
   function closeOverlays() {
     setMenuOpen(false);
+    setMapOpen(false);
+  }
+
+  function closeMapAndRestoreFocus() {
+    restoreMapFocusRef.current = true;
     setMapOpen(false);
   }
 
@@ -186,10 +192,14 @@ export function SiteShell({
 
   return (
     <div
-      className={`site-shell${introVisible ? ` site-shell--intro-${introStage}` : ""}`}
+      className={`site-shell${introVisible ? ` site-shell--intro-${introStage}` : ""}${mapOpen ? " site-shell--lattice-open" : ""}`}
       onClickCapture={handleNavigationIntent}
     >
-      <a className="skip-link" href="#main-content" tabIndex={introBlocksInterface ? -1 : undefined}>
+      <a
+        className="skip-link"
+        href="#main-content"
+        tabIndex={mapOpen || introBlocksInterface ? -1 : undefined}
+      >
         {common.skipContent}
       </a>
       <div
@@ -203,18 +213,29 @@ export function SiteShell({
       </span>
       <LatticeCanvas
         active={current}
+        closeLabel={common.close}
         introEnabled={current === "home"}
         introSkipKey={introSkipKey}
         labels={common.tags}
+        locale={locale}
+        navigatorHint={common.mapHint}
+        navigatorLabel={common.map}
+        navigatorOpen={mapOpen}
         onIntroComplete={handleIntroComplete}
         onIntroHandoff={handleIntroHandoff}
         onIntroIdentity={handleIntroIdentity}
         onIntroStart={handleIntroStart}
+        onNavigatorClose={closeMapAndRestoreFocus}
+        onNavigatorNavigate={closeOverlays}
         visited={visited}
       />
       {introVisible ? <LatticeIntro copy={common} onSkip={handleIntroSkip} stage={introStage} /> : null}
 
-      <header aria-hidden={introBlocksInterface || undefined} className="site-header" inert={introBlocksInterface || undefined}>
+      <header
+        aria-hidden={mapOpen || introBlocksInterface || undefined}
+        className="site-header"
+        inert={mapOpen || introBlocksInterface || undefined}
+      >
         <Link className="brand" href={hrefFor(locale, "home")} onClick={closeOverlays}>
           <span>Eduardo Neto</span>
           <span>latticeknight</span>
@@ -228,11 +249,12 @@ export function SiteShell({
         </nav>
         <LanguageSwitch current={current} label={common.language} locale={locale} />
         <button
-          aria-controls="lattice-dialog"
+          aria-controls="lattice-navigation"
           aria-expanded={mapOpen}
           aria-haspopup="dialog"
           className="header-control"
           onClick={() => { setMapOpen(true); setMenuOpen(false); }}
+          ref={mapTriggerRef}
           type="button"
         >
           {common.map}
@@ -283,48 +305,18 @@ export function SiteShell({
         </nav>
       ) : null}
 
-      {mapOpen ? (
-        <dialog
-          aria-label={common.map}
-          className="map-overlay"
-          id="lattice-dialog"
-          onCancel={(event) => {
-            event.preventDefault();
-            setMapOpen(false);
-          }}
-          onClose={() => setMapOpen(false)}
-          onMouseDown={(event) => {
-          if (event.currentTarget === event.target) setMapOpen(false);
-          }}
-          ref={mapDialogRef}
-        >
-          <div className="map-diagram">
-            <button className="map-close" onClick={() => setMapOpen(false)} type="button" aria-label={common.close}>×</button>
-            <MapGraph
-              current={current}
-              hint={common.mapHint}
-              labels={common.tags}
-              locale={locale}
-              mapLabel={common.map}
-              onNavigate={closeOverlays}
-              visited={visited}
-            />
-          </div>
-        </dialog>
-      ) : null}
-
       <main
-        aria-hidden={menuOpen || introBlocksInterface || undefined}
+        aria-hidden={menuOpen || mapOpen || introBlocksInterface || undefined}
         className="page-transition"
         id="main-content"
-        inert={menuOpen || introBlocksInterface || undefined}
+        inert={menuOpen || mapOpen || introBlocksInterface || undefined}
       >
         {children}
       </main>
       <footer
-        aria-hidden={menuOpen || introBlocksInterface || undefined}
+        aria-hidden={menuOpen || mapOpen || introBlocksInterface || undefined}
         className="site-footer"
-        inert={menuOpen || introBlocksInterface || undefined}
+        inert={menuOpen || mapOpen || introBlocksInterface || undefined}
       >
         <span>EDUARDO NETO · LATTICEKNIGHT</span>
         <span>
