@@ -6,8 +6,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Mo
 
 import { LatticeCanvas } from "@/components/lattice-canvas";
 import { LatticeIntro, type LatticeIntroStage } from "@/components/lattice-intro";
-import { MapGraph } from "@/components/map-graph";
-import { INTRO_SEEN_KEY } from "@/lib/intro-decision";
+import { markIntroDone } from "@/lib/intro-decision";
 import { hrefFor, pageSlugs, slugFromPathname, type Locale, type PageSlug, type SiteDictionary } from "@/lib/site";
 
 const subscribeToHydration = () => () => undefined;
@@ -46,7 +45,9 @@ export function SiteShell({
   );
   const [introStage, setIntroStage] = useState<LatticeIntroStage>(current === "home" ? "pending" : "complete");
   const [introSkipKey, setIntroSkipKey] = useState(0);
-  const mapDialogRef = useRef<HTMLDialogElement>(null);
+  const mapTriggerRef = useRef<HTMLButtonElement>(null);
+  const mapFocusTargetRef = useRef<HTMLElement | null>(null);
+  const restoreMapFocusRef = useRef(false);
   const pendingPathRef = useRef<string | null>(null);
   const pendingStartedAtRef = useRef(0);
   const common = dictionary.common;
@@ -64,11 +65,7 @@ export function SiteShell({
 
   useEffect(() => {
     if (current !== "home" || introStage !== "complete") return;
-    try {
-      window.sessionStorage.setItem(INTRO_SEEN_KEY, "1");
-    } catch {
-      // Session storage is optional; the site remains usable without it.
-    }
+    markIntroDone();
   }, [current, introStage]);
 
   useEffect(() => {
@@ -112,7 +109,7 @@ export function SiteShell({
         ? (JSON.parse(saved) as string[]).filter((value): value is PageSlug => pageSlugs.includes(value as PageSlug))
         : [];
     } catch {
-      window.sessionStorage.removeItem("lk-visited");
+      stored = [];
     }
     const timer = window.setTimeout(() => {
       setVisited((previous) => Array.from(new Set([...previous, ...stored, current])));
@@ -121,11 +118,27 @@ export function SiteShell({
   }, [current]);
 
   useEffect(() => {
-    window.sessionStorage.setItem("lk-visited", JSON.stringify(visited));
+    try {
+      window.sessionStorage.setItem("lk-visited", JSON.stringify(visited));
+    } catch {
+      // Session storage is optional; the site remains usable without it.
+    }
   }, [visited]);
 
   useEffect(() => {
-    const openMap = () => setMapOpen(true);
+    const openMap = (event: Event) => {
+      const requestedTarget = event instanceof CustomEvent
+        ? event.detail?.trigger
+        : null;
+      const activeElement = document.activeElement;
+      mapFocusTargetRef.current = requestedTarget instanceof HTMLElement
+        ? requestedTarget
+        : activeElement instanceof HTMLElement && activeElement !== document.body
+          ? activeElement
+          : mapTriggerRef.current;
+      setMenuOpen(false);
+      setMapOpen(true);
+    };
     window.addEventListener("lattice:open-map", openMap);
     return () => window.removeEventListener("lattice:open-map", openMap);
   }, []);
@@ -135,6 +148,7 @@ export function SiteShell({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setMenuOpen(false);
+        restoreMapFocusRef.current = mapOpen;
         setMapOpen(false);
       }
     };
@@ -148,14 +162,28 @@ export function SiteShell({
   }, [mapOpen, menuOpen]);
 
   useEffect(() => {
-    if (mapOpen && mapDialogRef.current && !mapDialogRef.current.open) {
-      mapDialogRef.current.showModal();
-    }
+    if (mapOpen || !restoreMapFocusRef.current) return;
+    const focusTarget = mapFocusTargetRef.current?.isConnected
+      ? mapFocusTargetRef.current
+      : mapTriggerRef.current;
+    focusTarget?.focus({ preventScroll: true });
+    mapFocusTargetRef.current = null;
+    restoreMapFocusRef.current = false;
   }, [mapOpen]);
 
   function closeOverlays() {
     setMenuOpen(false);
     setMapOpen(false);
+  }
+
+  function closeMapAndRestoreFocus() {
+    restoreMapFocusRef.current = true;
+    setMapOpen(false);
+  }
+
+  function cancelNavigationIntent() {
+    pendingPathRef.current = null;
+    setRoutePending(false);
   }
 
   function handleNavigationIntent(event: ReactMouseEvent<HTMLDivElement>) {
@@ -186,10 +214,14 @@ export function SiteShell({
 
   return (
     <div
-      className={`site-shell${introVisible ? ` site-shell--intro-${introStage}` : ""}`}
+      className={`site-shell${introVisible ? ` site-shell--intro-${introStage}` : ""}${mapOpen ? " site-shell--lattice-open" : ""}`}
       onClickCapture={handleNavigationIntent}
     >
-      <a className="skip-link" href="#main-content" tabIndex={introBlocksInterface ? -1 : undefined}>
+      <a
+        className="skip-link"
+        href="#main-content"
+        tabIndex={mapOpen || introBlocksInterface ? -1 : undefined}
+      >
         {common.skipContent}
       </a>
       <div
@@ -203,18 +235,30 @@ export function SiteShell({
       </span>
       <LatticeCanvas
         active={current}
+        closeLabel={common.close}
         introEnabled={current === "home"}
         introSkipKey={introSkipKey}
         labels={common.tags}
+        locale={locale}
+        navigatorHint={common.mapHint}
+        navigatorLabel={common.map}
+        navigatorOpen={mapOpen}
         onIntroComplete={handleIntroComplete}
         onIntroHandoff={handleIntroHandoff}
         onIntroIdentity={handleIntroIdentity}
         onIntroStart={handleIntroStart}
+        onNavigatorCancelNavigation={cancelNavigationIntent}
+        onNavigatorClose={closeMapAndRestoreFocus}
+        onNavigatorNavigate={closeOverlays}
         visited={visited}
       />
       {introVisible ? <LatticeIntro copy={common} onSkip={handleIntroSkip} stage={introStage} /> : null}
 
-      <header aria-hidden={introBlocksInterface || undefined} className="site-header" inert={introBlocksInterface || undefined}>
+      <header
+        aria-hidden={mapOpen || introBlocksInterface || undefined}
+        className="site-header"
+        inert={mapOpen || introBlocksInterface || undefined}
+      >
         <Link className="brand" href={hrefFor(locale, "home")} onClick={closeOverlays}>
           <span>Eduardo Neto</span>
           <span>latticeknight</span>
@@ -228,11 +272,16 @@ export function SiteShell({
         </nav>
         <LanguageSwitch current={current} label={common.language} locale={locale} />
         <button
-          aria-controls="lattice-dialog"
+          aria-controls="lattice-navigation"
           aria-expanded={mapOpen}
           aria-haspopup="dialog"
           className="header-control"
-          onClick={() => { setMapOpen(true); setMenuOpen(false); }}
+          onClick={(event) => {
+            mapFocusTargetRef.current = event.currentTarget;
+            setMapOpen(true);
+            setMenuOpen(false);
+          }}
+          ref={mapTriggerRef}
           type="button"
         >
           {common.map}
@@ -283,48 +332,18 @@ export function SiteShell({
         </nav>
       ) : null}
 
-      {mapOpen ? (
-        <dialog
-          aria-label={common.map}
-          className="map-overlay"
-          id="lattice-dialog"
-          onCancel={(event) => {
-            event.preventDefault();
-            setMapOpen(false);
-          }}
-          onClose={() => setMapOpen(false)}
-          onMouseDown={(event) => {
-          if (event.currentTarget === event.target) setMapOpen(false);
-          }}
-          ref={mapDialogRef}
-        >
-          <div className="map-diagram">
-            <button className="map-close" onClick={() => setMapOpen(false)} type="button" aria-label={common.close}>×</button>
-            <MapGraph
-              current={current}
-              hint={common.mapHint}
-              labels={common.tags}
-              locale={locale}
-              mapLabel={common.map}
-              onNavigate={closeOverlays}
-              visited={visited}
-            />
-          </div>
-        </dialog>
-      ) : null}
-
       <main
-        aria-hidden={menuOpen || introBlocksInterface || undefined}
+        aria-hidden={menuOpen || mapOpen || introBlocksInterface || undefined}
         className="page-transition"
         id="main-content"
-        inert={menuOpen || introBlocksInterface || undefined}
+        inert={menuOpen || mapOpen || introBlocksInterface || undefined}
       >
         {children}
       </main>
       <footer
-        aria-hidden={menuOpen || introBlocksInterface || undefined}
+        aria-hidden={menuOpen || mapOpen || introBlocksInterface || undefined}
         className="site-footer"
-        inert={menuOpen || introBlocksInterface || undefined}
+        inert={menuOpen || mapOpen || introBlocksInterface || undefined}
       >
         <span>EDUARDO NETO · LATTICEKNIGHT</span>
         <span>

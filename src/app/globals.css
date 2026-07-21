@@ -157,19 +157,54 @@ button {
   transform: translateY(0);
 }
 
-.lattice-canvas {
+.lattice-scene {
   position: fixed;
   z-index: 2;
   inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
+  touch-action: none;
 }
 
-.site-shell--intro-pending .lattice-canvas,
-.site-shell--intro-forming .lattice-canvas,
-.site-shell--intro-identity .lattice-canvas,
-.site-shell--intro-handoff .lattice-canvas {
+.lattice-scene::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background: rgba(5, 6, 8, 0.9);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.65s var(--ease-travel);
+}
+
+.lattice-canvas {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.lattice-scene--navigator {
+  z-index: 60;
+  cursor: grab;
+  pointer-events: auto;
+}
+
+.lattice-scene--navigator:active {
+  cursor: grabbing;
+}
+
+.lattice-scene--navigator::before {
+  opacity: 1;
+}
+
+:root:not([data-lk-intro="off"]) .site-shell--intro-pending .lattice-scene,
+.site-shell--intro-forming .lattice-scene,
+.site-shell--intro-identity .lattice-scene,
+.site-shell--intro-handoff .lattice-scene {
   z-index: 61;
 }
 
@@ -186,7 +221,7 @@ button {
   padding: 0 clamp(16px, 3vw, 36px);
   background: linear-gradient(rgba(8, 10, 14, 0.94), rgba(8, 10, 14, 0.74) 70%, transparent);
   backdrop-filter: blur(6px);
-  transition: opacity 0.45s ease;
+  transition: opacity 0.45s ease, transform 0.55s var(--ease-travel);
 }
 
 .brand {
@@ -367,117 +402,110 @@ button {
   box-shadow: 0 0 12px rgba(142, 196, 214, 0.7);
 }
 
-.map-overlay {
+.lattice-navigation {
   position: fixed;
-  z-index: 50;
+  z-index: 2;
   inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  width: 100vw;
-  max-width: none;
-  height: 100vh;
-  max-height: none;
-  margin: 0;
-  border: 0;
-  background: rgba(5, 6, 8, 0.92);
-  backdrop-filter: blur(8px);
-  animation: fade-in 0.3s ease both;
+  overflow: hidden;
+  outline: none;
 }
 
-.map-overlay::backdrop {
-  background: transparent;
-}
-
-.map-diagram {
-  position: relative;
-  width: min(920px, 94vw);
-  height: min(620px, 80vh);
-}
-
-.map-graph,
-.map-graph-canvas,
-.map-graph-nodes {
+.lattice-navigation__nodes {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-}
-
-.map-graph {
-  overflow: visible;
-  touch-action: none;
-}
-
-.map-graph-canvas {
   pointer-events: none;
 }
 
-.map-graph-nodes {
-  pointer-events: none;
-}
-
-.map-node-hit-area {
+.lattice-node-link {
   position: absolute;
   top: 0;
   left: 0;
-  width: 88px;
-  height: 68px;
-  border-radius: 50%;
-  cursor: grab;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 11px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: rgba(5, 6, 8, 0.68);
+  color: var(--text-3);
+  cursor: pointer;
+  font-family: var(--font-mono), monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  opacity: 0;
   pointer-events: auto;
-  transform: translate(-50%, -50%);
+  text-transform: uppercase;
+  transform-origin: 50% 0;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
   user-select: none;
-}
-
-.map-node-hit-area:active {
-  cursor: grabbing;
-}
-
-.map-node-hit-area:focus-visible {
-  border: 1px solid rgba(183, 221, 233, 0.46);
-  outline: 0;
-  box-shadow: inset 0 0 18px rgba(142, 196, 214, 0.08);
-}
-
-.map-node-accessible-label {
-  position: absolute;
-  overflow: hidden;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  border: 0;
-  clip: rect(0, 0, 0, 0);
   white-space: nowrap;
+  animation: lattice-label-in 0.55s ease 0.16s forwards;
 }
 
-.map-graph-hint {
-  position: absolute;
-  right: 0;
-  bottom: -46px;
-  left: 0;
+.lattice-node-link:hover,
+.lattice-node-link:focus-visible,
+.lattice-node-link[aria-current="page"] {
+  border-color: rgba(142, 196, 214, 0.42);
+  background: rgba(8, 10, 14, 0.88);
+  color: var(--text-1);
+}
+
+.lattice-node-link__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 8px rgba(142, 196, 214, 0.42);
+}
+
+.lattice-node-link[aria-current="page"] .lattice-node-link__dot {
+  width: 7px;
+  height: 7px;
+  background: var(--cyan-bright);
+  box-shadow: 0 0 14px rgba(142, 196, 214, 0.78);
+}
+
+.lattice-navigation__hint {
+  position: fixed;
+  z-index: 40;
+  right: 24px;
+  bottom: 24px;
+  left: 24px;
+  margin: 0;
   color: var(--text-5);
   font-family: var(--font-mono), monospace;
   font-size: 10px;
   letter-spacing: 0.18em;
+  pointer-events: none;
   text-align: center;
+  animation: fade-in 0.5s ease 0.35s both;
 }
 
-.map-close {
-  position: absolute;
-  z-index: 2;
-  top: -30px;
-  right: 0;
-  width: 34px;
-  height: 34px;
+.lattice-navigation__close {
+  position: fixed;
+  z-index: 50;
+  top: 12px;
+  right: clamp(16px, 3vw, 36px);
+  min-height: 36px;
+  padding: 8px 12px;
   border: 1px solid var(--border-3);
   border-radius: var(--radius-sm);
-  background: rgba(15, 18, 24, 0.8);
+  background: rgba(8, 10, 14, 0.86);
   color: var(--text-3);
   cursor: pointer;
   font-family: var(--font-mono), monospace;
-  font-size: 20px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.lattice-navigation__close:hover {
+  border-color: var(--border-cyan-strong);
+  color: var(--text-1);
 }
 
 .site-intro {
@@ -742,11 +770,31 @@ button {
   opacity: 1;
 }
 
+.site-shell--lattice-open .site-header {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(0, -18px, 0);
+}
+
+.site-shell--lattice-open .page-transition,
+.site-shell--lattice-open .site-footer {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.site-shell--lattice-open .page-transition {
+  transform: translate3d(-105vw, 0, 0) scale(0.975);
+}
+
+.site-shell--lattice-open .site-footer {
+  transform: translate3d(0, 18px, 0);
+}
+
 .page-transition {
   position: relative;
   z-index: 10;
   min-height: calc(100vh - 78px);
-  animation: page-resolve 0.45s ease both;
+  animation: page-resolve 0.45s ease backwards;
   transition: opacity 0.45s ease, transform 0.45s ease;
 }
 
@@ -2130,6 +2178,7 @@ button {
   font-family: var(--font-mono), monospace;
   font-size: 10.5px;
   letter-spacing: 0.12em;
+  transition: opacity 0.55s var(--ease-travel), transform 0.65s var(--ease-travel);
 }
 
 .site-footer > span:nth-child(2) {
@@ -2146,6 +2195,11 @@ button {
   to { opacity: 1; }
 }
 
+@keyframes lattice-label-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: translateY(0); }
@@ -2157,8 +2211,8 @@ button {
 }
 
 @keyframes page-resolve {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { filter: opacity(0); translate: 0 10px; }
+  to { filter: opacity(1); translate: 0 0; }
 }
 
 @keyframes route-progress {
@@ -2300,19 +2354,19 @@ button {
     align-items: flex-start;
   }
 
-  .map-node-hit-area {
-    width: 64px;
-    height: 54px;
-  }
-
-  .map-diagram {
-    width: 94vw;
-    height: min(620px, 76vh);
-  }
-
-  .map-graph-hint {
-    bottom: -54px;
+  .lattice-node-link {
+    min-height: 34px;
+    padding: 7px 9px;
     font-size: 8px;
+    letter-spacing: 0.13em;
+  }
+
+  .lattice-navigation__hint {
+    right: 60px;
+    bottom: 12px;
+    left: 60px;
+    font-size: 8px;
+    line-height: 1.7;
   }
 
   .site-footer {
