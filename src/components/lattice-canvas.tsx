@@ -8,7 +8,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
-import { INTRO_SEEN_KEY, introWillPlay } from "@/lib/intro-decision";
+import { introWillPlay, markIntroDone, markIntroSeen } from "@/lib/intro-decision";
 import {
   hrefFor,
   pageSlugs,
@@ -100,7 +100,7 @@ type SceneEngine = {
   reduced: boolean;
   pulse: { from: PageSlug; to: PageSlug; progress: number } | null;
   layout: (immediate: boolean) => void;
-  draw: (time?: number) => void;
+  requestDraw: () => void;
   skipIntro: () => void;
 };
 
@@ -173,8 +173,24 @@ const primaryIntroLabels = new Set<PageSlug>([
   "notes",
 ]);
 
+const frameMilliseconds = 1000 / 60;
+const introFadeDuration = 620;
+
 function clamp(value: number, minimum = 0, maximum = 1) {
   return Math.max(minimum, Math.min(maximum, value));
+}
+
+/**
+ * The easing below is authored as per-frame factors at 60fps. Both helpers
+ * rescale a factor to the frame actually elapsed so the scene converges at the
+ * same rate on a 120Hz display as on a 60Hz one.
+ */
+function easeFactor(factor: number, step: number) {
+  return 1 - Math.pow(1 - factor, step);
+}
+
+function decayFactor(factor: number, step: number) {
+  return Math.pow(factor, step);
 }
 
 function smoothStep(value: number) {
@@ -246,10 +262,10 @@ export function LatticeCanvas({
   onIntroComplete,
 }: LatticeCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const sceneRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<SceneEngine | null>(null);
   const linkRefs = useRef<Partial<Record<PageSlug, HTMLAnchorElement | null>>>({});
   const labelMotionRef = useRef<Partial<Record<PageSlug, LabelMotion>>>({});
+  const labelHalfWidthRef = useRef<Partial<Record<PageSlug, number>>>({});
   const initialActiveRef = useRef(active);
   const initialVisitedRef = useRef(visited);
   const initialLabelsRef = useRef(labels);
@@ -272,6 +288,7 @@ export function LatticeCanvas({
 
   useEffect(() => {
     initialLabelsRef.current = labels;
+    labelHalfWidthRef.current = {};
   }, [labels]);
 
   useEffect(() => {
@@ -287,6 +304,7 @@ export function LatticeCanvas({
     }
 
     let frame = 0;
+    let reducedFrame = 0;
     let pausedByOverlay = false;
     let seed = 42;
     let introActive = false;
@@ -299,6 +317,8 @@ export function LatticeCanvas({
     let identityNotified = false;
     let handoffNotified = false;
     let sceneMotionStartedAt: number | null = null;
+    let sceneLastTime: number | null = null;
+    let introFade: { snapshot: HTMLCanvasElement; startedAt: number } | null = null;
     let width = window.innerWidth;
     let height = window.innerHeight;
     const random = () => {
@@ -329,7 +349,7 @@ export function LatticeCanvas({
       reduced: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
       pulse: null,
       layout: () => undefined,
-      draw: () => undefined,
+      requestDraw: () => undefined,
       skipIntro: () => undefined,
     };
 
@@ -445,6 +465,7 @@ export function LatticeCanvas({
       yaw: number,
       pitch: number,
       zoom: number,
+      out?: ProjectedNode,
     ): ProjectedNode => {
       const centerX = width / 2;
       const centerY = height * 0.46;
@@ -456,34 +477,47 @@ export function LatticeCanvas({
       const finalZ = relativeY * Math.sin(pitch) + rotatedZ * Math.cos(pitch);
       const perspective = Math.max(680, Math.min(width, height) * 1.25);
       const scale = clamp(perspective / (perspective + finalZ), 0.66, 1.42);
-      return {
-        x: centerX + rotatedX * scale * zoom,
-        y: centerY + rotatedY * scale * zoom,
-        scale,
-        depth: clamp((scale - 0.66) / 0.76),
-      };
+      const target = out ?? { x: 0, y: 0, scale: 1, depth: 0 };
+      target.x = centerX + rotatedX * scale * zoom;
+      target.y = centerY + rotatedY * scale * zoom;
+      target.scale = scale;
+      target.depth = clamp((scale - 0.66) / 0.76);
+      return target;
     };
 
-    const updateLabels = () => {
+    const labelHalfWidth = (slug: PageSlug, link: HTMLAnchorElement) => {
+      const cached = labelHalfWidthRef.current[slug];
+      if (cached) return cached;
+      const measured = link.offsetWidth;
+      if (measured <= 0) return 62;
+      labelHalfWidthRef.current[slug] = measured / 2;
+      return measured / 2;
+    };
+
+    const updateLabels = (step: number) => {
       pageSlugs.forEach((slug) => {
         const link = linkRefs.current[slug];
         const hubIndex = engine.hubIndexes.get(slug);
         const hub = hubIndex === undefined ? undefined : engine.projected.get(hubIndex);
         if (!link || !hub) return;
-        const targetX = clamp(hub.x, 62, width - 62);
+        const labelScale = clamp(0.86 + hub.depth * 0.2, 0.84, 1.08);
+        const margin = Math.min(
+          labelHalfWidth(slug, link) * labelScale + 8,
+          width / 2,
+        );
+        const targetX = clamp(hub.x, margin, Math.max(margin, width - margin));
         const targetY = clamp(hub.y + 18 * hub.scale, 48, height - 74);
         let motion = labelMotionRef.current[slug];
         if (!motion) {
           motion = { x: targetX, y: targetY, vx: 0, vy: 0 };
           labelMotionRef.current[slug] = motion;
         }
-        const spring = engine.reduced ? 1 : 0.115;
-        const damping = engine.reduced ? 0 : 0.72;
+        const spring = engine.reduced ? 1 : 0.115 * step;
+        const damping = engine.reduced ? 0 : decayFactor(0.72, step);
         motion.vx = (motion.vx + (targetX - motion.x) * spring) * damping;
         motion.vy = (motion.vy + (targetY - motion.y) * spring) * damping;
-        motion.x += engine.reduced ? targetX - motion.x : motion.vx;
-        motion.y += engine.reduced ? targetY - motion.y : motion.vy;
-        const labelScale = clamp(0.86 + hub.depth * 0.2, 0.84, 1.08);
+        motion.x += engine.reduced ? targetX - motion.x : motion.vx * step;
+        motion.y += engine.reduced ? targetY - motion.y : motion.vy * step;
         link.style.transform = `translate3d(${motion.x}px, ${motion.y}px, 0) translate(-50%, 0) scale(${labelScale})`;
         link.style.zIndex = `${Math.round(10 + hub.depth * 20)}`;
       });
@@ -537,12 +571,20 @@ export function LatticeCanvas({
       engine.hoveredEdge = closestEdge;
     };
 
+    const depthOrder = engine.nodes.slice();
+
     const drawScene = (time = performance.now()) => {
+      const previousTime = sceneLastTime;
+      const step =
+        previousTime === null
+          ? 1
+          : clamp((time - previousTime) / frameMilliseconds, 0.2, 3);
+      sceneLastTime = time;
       const targetProgress = engine.navigatorOpen ? 1 : 0;
       engine.navigatorProgress = engine.reduced
         ? targetProgress
         : engine.navigatorProgress +
-          (targetProgress - engine.navigatorProgress) * 0.075;
+          (targetProgress - engine.navigatorProgress) * easeFactor(0.075, step);
       const progress = engine.navigatorProgress;
       const sceneMotionProgress = engine.reduced
         ? 0
@@ -551,10 +593,10 @@ export function LatticeCanvas({
           : smoothStep((time - sceneMotionStartedAt) / 1200);
 
       if (!engine.dragging && !engine.reduced) {
-        engine.camera.yaw += engine.camera.velocityYaw;
-        engine.camera.pitch += engine.camera.velocityPitch;
-        engine.camera.velocityYaw *= 0.94;
-        engine.camera.velocityPitch *= 0.9;
+        engine.camera.yaw += engine.camera.velocityYaw * step;
+        engine.camera.pitch += engine.camera.velocityPitch * step;
+        engine.camera.velocityYaw *= decayFactor(0.94, step);
+        engine.camera.velocityPitch *= decayFactor(0.9, step);
       }
       engine.camera.pitch = clamp(engine.camera.pitch, -0.68, 0.68);
       const autoYaw = engine.reduced
@@ -574,20 +616,26 @@ export function LatticeCanvas({
       const zoom = 1 + progress * 0.09;
 
       engine.nodes.forEach((node) => {
-        const settle = engine.reduced ? 1 : 0.055;
+        const settle = engine.reduced ? 1 : easeFactor(0.055, step);
         node.x += (node.targetX - node.x) * settle;
         node.y += (node.targetY - node.y) * settle;
         node.z += (node.targetZ - node.z) * settle;
         const seconds = time / 1000;
         const motion = sceneMotionProgress;
         const floatStrength = (2.2 + progress * 2.8) * motion;
-        const projected = project(
+        let projected = engine.projected.get(node.id);
+        if (!projected) {
+          projected = { x: 0, y: 0, scale: 1, depth: 0 };
+          engine.projected.set(node.id, projected);
+        }
+        project(
           node.x + Math.sin(seconds * 0.19 + node.phase) * floatStrength,
           node.y + Math.cos(seconds * 0.16 + node.phase) * floatStrength,
           node.z + Math.sin(seconds * 0.14 + node.phase * 1.3) * 14 * motion,
           yaw,
           pitch,
           zoom,
+          projected,
         );
         const distance = Math.hypot(
           engine.pointer.x - projected.x,
@@ -603,16 +651,13 @@ export function LatticeCanvas({
           (engine.pointer.x - projected.x) * attraction;
         const targetAttractionY =
           (engine.pointer.y - projected.y) * attraction;
-        const attractionEase = engine.reduced ? 1 : 0.12;
+        const attractionEase = engine.reduced ? 1 : easeFactor(0.12, step);
         node.attractionX +=
           (targetAttractionX - node.attractionX) * attractionEase;
         node.attractionY +=
           (targetAttractionY - node.attractionY) * attractionEase;
-        engine.projected.set(node.id, {
-          ...projected,
-          x: projected.x + node.attractionX,
-          y: projected.y + node.attractionY,
-        });
+        projected.x += node.attractionX;
+        projected.y += node.attractionY;
       });
 
       updateHoverTarget();
@@ -642,17 +687,6 @@ export function LatticeCanvas({
               ? 1.08
               : 0.7;
         const alpha = baseAlpha * alphaMultiplier * (edge.route ? 1 : 0.62);
-        const gradient = context.createLinearGradient(
-          first.x,
-          first.y,
-          second.x,
-          second.y,
-        );
-        gradient.addColorStop(0, `rgba(142,196,214,${alpha})`);
-        gradient.addColorStop(
-          1,
-          `rgba(216,163,95,${alpha * (edge.route ? 0.78 : 0.42)})`,
-        );
         if (hovered || (progress > 0.45 && activeEdge && edge.route)) {
           context.strokeStyle = `rgba(142,196,214,${alpha * 0.13})`;
           context.lineWidth = edge.route ? 6 : 4;
@@ -661,7 +695,22 @@ export function LatticeCanvas({
           context.lineTo(second.x, second.y);
           context.stroke();
         }
-        context.strokeStyle = gradient;
+        if (edge.route || activeEdge || hovered) {
+          const gradient = context.createLinearGradient(
+            first.x,
+            first.y,
+            second.x,
+            second.y,
+          );
+          gradient.addColorStop(0, `rgba(142,196,214,${alpha})`);
+          gradient.addColorStop(
+            1,
+            `rgba(216,163,95,${alpha * (edge.route ? 0.78 : 0.42)})`,
+          );
+          context.strokeStyle = gradient;
+        } else {
+          context.strokeStyle = `rgba(164,186,179,${alpha * 0.71})`;
+        }
         context.lineWidth = edge.route ? 0.85 + progress * 0.45 : 0.55;
         context.beginPath();
         context.moveTo(first.x, first.y);
@@ -685,12 +734,12 @@ export function LatticeCanvas({
         }
       });
 
-      const sortedNodes = [...engine.nodes].sort((first, second) => {
+      depthOrder.sort((first, second) => {
         const firstDepth = engine.projected.get(first.id)?.scale ?? 1;
         const secondDepth = engine.projected.get(second.id)?.scale ?? 1;
         return firstDepth - secondDepth;
       });
-      sortedNodes.forEach((node) => {
+      depthOrder.forEach((node) => {
         const point = engine.projected.get(node.id);
         if (!point) return;
         const activeNode = node.cluster === engine.active;
@@ -740,14 +789,22 @@ export function LatticeCanvas({
           context.beginPath();
           context.arc(pulseX, pulseY, 2.8, 0, Math.PI * 2);
           context.fill();
-          engine.pulse.progress += 0.022;
+          engine.pulse.progress += 0.022 * step;
           if (engine.pulse.progress > 1) engine.pulse = null;
         }
       }
-      updateLabels();
+      updateLabels(step);
     };
 
-    engine.draw = drawScene;
+    const scheduleReducedDraw = () => {
+      if (!engine.reduced || reducedFrame) return;
+      reducedFrame = window.requestAnimationFrame((time) => {
+        reducedFrame = 0;
+        drawScene(time);
+      });
+    };
+
+    engine.requestDraw = scheduleReducedDraw;
 
     const prepareIntro = () => {
       const scale = width < 640 ? 0.78 : 1;
@@ -1046,14 +1103,6 @@ export function LatticeCanvas({
       }
     };
 
-    const markIntroSeen = () => {
-      try {
-        window.sessionStorage.setItem(INTRO_SEEN_KEY, "1");
-      } catch {
-        // The intro remains usable when storage is unavailable.
-      }
-    };
-
     const settleAtScene = () => {
       engine.nodes.forEach((node) => {
         node.x = node.targetX;
@@ -1062,11 +1111,30 @@ export function LatticeCanvas({
       });
     };
 
-    const finishIntro = () => {
+    /**
+     * The intro ends several times brighter than the ambient scene, and on
+     * mobile it hides part of the graph, so the last intro frame is kept as a
+     * layer that cross-fades into the ambient one instead of cutting to it.
+     */
+    const captureIntroFrame = () => {
+      const snapshot = document.createElement("canvas");
+      snapshot.width = canvasElement.width;
+      snapshot.height = canvasElement.height;
+      const snapshotContext = snapshot.getContext("2d");
+      if (!snapshotContext) return null;
+      snapshotContext.drawImage(canvasElement, 0, 0);
+      return snapshot;
+    };
+
+    const finishIntro = (time: number) => {
+      const snapshot = captureIntroFrame();
       introActive = false;
       introElapsed = introTimings[7] ?? 5.3;
       settleAtScene();
-      sceneMotionStartedAt = performance.now();
+      sceneMotionStartedAt = time;
+      sceneLastTime = null;
+      introFade = snapshot ? { snapshot, startedAt: time } : null;
+      markIntroDone();
       callbacksRef.current.onIntroComplete();
     };
 
@@ -1076,6 +1144,9 @@ export function LatticeCanvas({
       introElapsed = introTimings[7] ?? 5.3;
       settleAtScene();
       sceneMotionStartedAt = performance.now();
+      sceneLastTime = null;
+      introFade = null;
+      markIntroDone();
       drawScene(performance.now());
       callbacksRef.current.onIntroComplete();
     };
@@ -1107,7 +1178,16 @@ export function LatticeCanvas({
           handoffNotified = true;
           callbacksRef.current.onIntroHandoff();
         }
-        if (introElapsed >= introTimings[7]) finishIntro();
+        if (introElapsed >= introTimings[7]) finishIntro(time);
+      } else if (introFade) {
+        const overlay = introFade;
+        const fade = clamp((time - overlay.startedAt) / introFadeDuration);
+        context.globalAlpha = fade;
+        drawScene(time);
+        context.globalAlpha = 1 - fade;
+        context.drawImage(overlay.snapshot, 0, 0, width, height);
+        context.globalAlpha = 1;
+        if (fade >= 1) introFade = null;
       } else {
         drawScene(time);
       }
@@ -1122,6 +1202,7 @@ export function LatticeCanvas({
 
     const startAnimation = () => {
       if (engine.reduced || frame || document.hidden || pausedByOverlay) return;
+      sceneLastTime = null;
       frame = window.requestAnimationFrame(animate);
     };
 
@@ -1137,7 +1218,10 @@ export function LatticeCanvas({
 
     const onResume = () => {
       pausedByOverlay = false;
-      drawScene(performance.now());
+      if (!document.hidden) {
+        if (introActive) drawIntro(introElapsed);
+        else drawScene(performance.now());
+      }
       startAnimation();
     };
 
@@ -1146,19 +1230,21 @@ export function LatticeCanvas({
       engine.pointer.x = event.clientX;
       engine.pointer.y = event.clientY;
       engine.pointer.active = true;
-      if (engine.reduced) drawScene(performance.now());
+      scheduleReducedDraw();
     };
 
     const onPointerLeave = () => {
       if (engine.navigatorOpen) return;
       engine.pointer.active = false;
-      if (engine.reduced) drawScene(performance.now());
+      scheduleReducedDraw();
     };
 
     const onResize = () => {
       sizeCanvas();
       engine.layout(!introActive);
       labelMotionRef.current = {};
+      labelHalfWidthRef.current = {};
+      introFade = null;
       if (introActive) {
         prepareIntro();
         drawIntro(introElapsed);
@@ -1189,6 +1275,10 @@ export function LatticeCanvas({
 
     return () => {
       stopAnimation();
+      if (reducedFrame) {
+        window.cancelAnimationFrame(reducedFrame);
+        reducedFrame = 0;
+      }
       document.removeEventListener("visibilitychange", onVisibilityChange);
       document.documentElement.removeEventListener("pointerleave", onPointerLeave);
       window.removeEventListener("lattice:pause", onPause);
@@ -1208,7 +1298,7 @@ export function LatticeCanvas({
     if (previous !== active && !engine.reduced) {
       engine.pulse = { from: previous, to: active, progress: 0 };
     }
-    if (engine.reduced) engine.draw(performance.now());
+    engine.requestDraw();
   }, [active, visited]);
 
   useEffect(() => {
@@ -1218,11 +1308,12 @@ export function LatticeCanvas({
     engine.pointer.active = false;
     engine.hoveredCluster = null;
     engine.hoveredEdge = null;
+    labelHalfWidthRef.current = {};
     if (!navigatorOpen) {
       engine.dragging = null;
       engine.suppressClick = false;
     }
-    if (engine.reduced) engine.draw(performance.now());
+    engine.requestDraw();
     if (!navigatorOpen) return;
     const frameId = window.requestAnimationFrame(() => {
       linkRefs.current[active]?.focus({ preventScroll: true });
@@ -1235,8 +1326,7 @@ export function LatticeCanvas({
   }, [introSkipKey]);
 
   const redrawIfReduced = useCallback(() => {
-    const engine = engineRef.current;
-    if (engine?.reduced) engine.draw(performance.now());
+    engineRef.current?.requestDraw();
   }, []);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -1305,7 +1395,6 @@ export function LatticeCanvas({
       }}
       onPointerMove={handlePointerMove}
       onPointerUp={finishDrag}
-      ref={sceneRef}
     >
       <canvas aria-hidden="true" className="lattice-canvas" ref={canvasRef} />
       {navigatorOpen ? (

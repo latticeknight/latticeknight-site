@@ -33,3 +33,25 @@ export function introWillPlay(): boolean {
     document.documentElement.getAttribute(INTRO_DECISION_ATTRIBUTE) !== INTRO_DECISION_OFF
   );
 }
+
+/** Records the intro for the rest of the session. */
+export function markIntroSeen() {
+  try {
+    window.sessionStorage.setItem(INTRO_SEEN_KEY, "1");
+  } catch {
+    // Session storage is optional; the site remains usable without it.
+  }
+}
+
+/**
+ * Retires the decision for the rest of the document too. The pre-paint script
+ * only runs on a full document load, so without this a client-side remount of
+ * the locale layout would read a stale `play` and replay the finished intro.
+ */
+export function markIntroDone() {
+  markIntroSeen();
+  document.documentElement.setAttribute(
+    INTRO_DECISION_ATTRIBUTE,
+    INTRO_DECISION_OFF,
+  );
+}

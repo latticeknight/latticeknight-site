@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Mo
 
 import { LatticeCanvas } from "@/components/lattice-canvas";
 import { LatticeIntro, type LatticeIntroStage } from "@/components/lattice-intro";
-import { INTRO_SEEN_KEY } from "@/lib/intro-decision";
+import { markIntroDone } from "@/lib/intro-decision";
 import { hrefFor, pageSlugs, slugFromPathname, type Locale, type PageSlug, type SiteDictionary } from "@/lib/site";
 
 const subscribeToHydration = () => () => undefined;
@@ -64,11 +64,7 @@ export function SiteShell({
 
   useEffect(() => {
     if (current !== "home" || introStage !== "complete") return;
-    try {
-      window.sessionStorage.setItem(INTRO_SEEN_KEY, "1");
-    } catch {
-      // Session storage is optional; the site remains usable without it.
-    }
+    markIntroDone();
   }, [current, introStage]);
 
   useEffect(() => {
@@ -112,7 +108,7 @@ export function SiteShell({
         ? (JSON.parse(saved) as string[]).filter((value): value is PageSlug => pageSlugs.includes(value as PageSlug))
         : [];
     } catch {
-      window.sessionStorage.removeItem("lk-visited");
+      stored = [];
     }
     const timer = window.setTimeout(() => {
       setVisited((previous) => Array.from(new Set([...previous, ...stored, current])));
@@ -121,7 +117,11 @@ export function SiteShell({
   }, [current]);
 
   useEffect(() => {
-    window.sessionStorage.setItem("lk-visited", JSON.stringify(visited));
+    try {
+      window.sessionStorage.setItem("lk-visited", JSON.stringify(visited));
+    } catch {
+      // Session storage is optional; the site remains usable without it.
+    }
   }, [visited]);
 
   useEffect(() => {
