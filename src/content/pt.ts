@@ -1,4 +1,4 @@
-import type { SiteDictionary } from "@/lib/site";
+import { foundMyProUrl, type SiteDictionary } from "@/lib/site";
 
 export const pt: SiteDictionary = {
   localeName: "Português (Portugal)",
@@ -69,6 +69,11 @@ export const pt: SiteDictionary = {
         tone: "cyan",
         live: true,
         title: "FoundMyPro",
+        website: {
+          href: foundMyProUrl,
+          label: "foundmypro.com",
+          accessibleLabel: "Visitar o FoundMyPro (abre num novo separador)",
+        },
         body: "Uma plataforma de descoberta de serviços locais no Reino Unido. Primeiro crescimento, autoridade na pesquisa e receita de afiliados - subscrições mais tarde, se alguma vez fizerem sentido.",
         link: "Entrar no grupo →",
         target: "systems",
@@ -116,6 +121,11 @@ export const pt: SiteDictionary = {
     legend: ["EM PRODUÇÃO", "EM DESENVOLVIMENTO", "EXPERIMENTAL", "PLANEADO"],
     foundMyPro: {
       status: "EM PRODUÇÃO",
+      website: {
+        href: foundMyProUrl,
+        label: "foundmypro.com",
+        accessibleLabel: "Visitar o FoundMyPro (abre num novo separador)",
+      },
       intro:
         "A maior parte da pesquisa local está organizada em torno de instalações: um ponto no mapa, uma morada, um horário. Isso funciona para lojas - e falha com os profissionais móveis que vão até ao cliente. Um canalizador, cabeleireiro móvel ou tosquiador de cães sem loja física é quase invisível nas ferramentas baseadas em mapas, que apresentam as opções tradicionais em loja. O FoundMyPro existe para dar relevância online a estes profissionais que se deslocam ao cliente: dados estruturados de prestadores e serviços organizados por onde trabalham, não por onde estão sediados, pesquisa local forte e um modelo de afiliados que ganha com as ligações em vez de cobrar aos prestadores antes de a plataforma provar o seu valor.",
       facets: [

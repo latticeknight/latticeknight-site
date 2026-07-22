@@ -1,3 +1,4 @@
+import { ExternalProjectLink } from "@/components/external-project-link";
 import { OpenMapButton } from "@/components/open-map-button";
 import { RouteLink } from "@/components/route-link";
 import { StatusDot } from "@/components/status-dot";
@@ -35,6 +36,7 @@ export function HomePage({ locale, copy }: { locale: Locale; copy: SiteDictionar
               {card.label}
             </div>
             <h2>{card.title}</h2>
+            {card.website ? <ExternalProjectLink link={card.website} /> : null}
             <p>{card.body}</p>
             <RouteLink locale={locale} target={card.target}>
               {card.link}
