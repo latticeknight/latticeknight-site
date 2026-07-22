@@ -1048,6 +1048,8 @@ button {
   text-transform: lowercase;
 }
 
+/* Invisible overlay that lifts the small mono link to a 24px pointer target
+   without changing its visual size. Removing it regresses tap accuracy. */
 .project-website-link::before {
   content: "";
   position: absolute;
