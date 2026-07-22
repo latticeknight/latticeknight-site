@@ -58,6 +58,18 @@ export function slugFromSegment(segment: string): PageSlug | null {
 export type Facet = { tag: string; body: string };
 export type LabelBody = { label: string; body: string };
 export type TitleBody = { title: string; body: string };
+export type ExternalSiteLink = {
+  href: string;
+  label: string;
+  accessibleLabel: string;
+};
+
+export const foundMyProUrl = "https://www.foundmypro.com/";
+export const foundMyProLabel = "foundmypro.com";
+
+export function foundMyProLink(accessibleLabel: string): ExternalSiteLink {
+  return { href: foundMyProUrl, label: foundMyProLabel, accessibleLabel };
+}
 
 export type SiteDictionary = {
   localeName: string;
@@ -101,6 +113,7 @@ export type SiteDictionary = {
       link: string;
       target: PageSlug;
       live?: boolean;
+      website?: ExternalSiteLink;
     }>;
     connectionLabel: string;
     connectionBody: string;
@@ -116,6 +129,7 @@ export type SiteDictionary = {
     legend: [string, string, string, string];
     foundMyPro: {
       status: string;
+      website: ExternalSiteLink;
       intro: string;
       facets: Facet[];
       openQuestions: TitleBody;

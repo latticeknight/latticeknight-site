@@ -1,4 +1,6 @@
-import type { SiteDictionary } from "@/lib/site";
+import { foundMyProLink, type SiteDictionary } from "@/lib/site";
+
+const foundMyProWebsite = foundMyProLink("Visit foundmypro.com (opens in a new tab)");
 
 export const en: SiteDictionary = {
   localeName: "English (UK)",
@@ -69,6 +71,7 @@ export const en: SiteDictionary = {
         tone: "cyan",
         live: true,
         title: "FoundMyPro",
+        website: foundMyProWebsite,
         body: "A UK local-services discovery platform. Growth, search authority and affiliate revenue first - subscriptions later, if ever.",
         link: "Enter the cluster →",
         target: "systems",
@@ -116,6 +119,7 @@ export const en: SiteDictionary = {
     legend: ["LIVE", "IN DEVELOPMENT", "EXPERIMENTAL", "PLANNED"],
     foundMyPro: {
       status: "LIVE",
+      website: foundMyProWebsite,
       intro:
         "Most local search is built around premises: a pin on a map, an address, opening hours. That works for shops - and fails the mobile professionals who come to you. A plumber, mobile hairdresser or dog groomer with no storefront is nearly invisible in map-based tools, which surface the traditional in-store options instead. FoundMyPro exists to give these come-to-you professionals a place of relevance online: structured provider and service data organised around where they work rather than where they sit, strong local search, and an affiliate model that earns from connections rather than charging providers before the platform has proven its value.",
       facets: [

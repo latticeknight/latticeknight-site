@@ -1029,11 +1029,48 @@ button {
   line-height: 1.65;
 }
 
-.home-card > a {
+.home-card > a:not(.project-website-link) {
   display: inline-block;
   margin-top: 16px;
   font-size: 12.5px;
   letter-spacing: 0.04em;
+}
+
+.project-website-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--cyan);
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+}
+
+/* Invisible overlay that lifts the small mono link to a 24px pointer target
+   without changing its visual size. Removing it regresses tap accuracy. */
+.project-website-link::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  min-width: 24px;
+  height: max(100%, 24px);
+  transform: translateY(-50%);
+}
+
+.project-website-link span {
+  transition: transform 160ms ease;
+}
+
+.project-website-link:hover span {
+  transform: translate(2px, -2px);
+}
+
+.home-card > .project-website-link {
+  margin: -2px 0 14px;
 }
 
 .home-connection {
@@ -1159,6 +1196,10 @@ button {
 .system-panel > h2 {
   margin: 6px 0 10px;
   font-size: 27px;
+}
+
+.system-panel > .project-website-link {
+  margin: -3px 0 18px;
 }
 
 .system-intro {

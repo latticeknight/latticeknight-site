@@ -1,3 +1,4 @@
+import { ExternalProjectLink } from "@/components/external-project-link";
 import { PageHeader } from "@/components/page-header";
 import { StatusDot } from "@/components/status-dot";
 import type { SiteDictionary } from "@/lib/site";
@@ -30,6 +31,7 @@ export function SystemsPage({ copy }: { copy: SiteDictionary["systems"] }) {
       <section className="panel system-panel">
         <div className="system-status system-status--cyan"><StatusDot breathe />{copy.foundMyPro.status}</div>
         <h2>FoundMyPro</h2>
+        <ExternalProjectLink link={copy.foundMyPro.website} />
         <p className="system-intro">{copy.foundMyPro.intro}</p>
         <FacetGrid facets={copy.foundMyPro.facets} tone="cyan" />
         <div className="system-footnotes">
