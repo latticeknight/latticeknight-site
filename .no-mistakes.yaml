@@ -1,0 +1,4 @@
+# Trusted commands run by the local validation gate from the default branch.
+commands:
+  test: "npm ci && npm run typecheck && npm run build && npm audit --omit=dev --omit=optional --audit-level=high"
+  lint: "npm ci && npm run lint"
