@@ -1037,6 +1037,7 @@ button {
 }
 
 .project-website-link {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1045,6 +1046,17 @@ button {
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: lowercase;
+}
+
+.project-website-link::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  min-width: 24px;
+  height: max(100%, 24px);
+  transform: translateY(-50%);
 }
 
 .project-website-link span {

@@ -65,6 +65,11 @@ export type ExternalSiteLink = {
 };
 
 export const foundMyProUrl = "https://www.foundmypro.com/";
+export const foundMyProLabel = "foundmypro.com";
+
+export function foundMyProLink(accessibleLabel: string): ExternalSiteLink {
+  return { href: foundMyProUrl, label: foundMyProLabel, accessibleLabel };
+}
 
 export type SiteDictionary = {
   localeName: string;
