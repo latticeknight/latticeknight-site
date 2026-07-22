@@ -39,5 +39,10 @@ jobs:
       - name: Build
         run: npm run build
 
+      # `--omit=optional` drops Next.js' optional `sharp` dependency, which only backs
+      # self-hosted image optimization. This site deploys on Vercel, where images are
+      # optimized by the platform rather than by `node_modules/sharp`.
+      # Remove the flag once Next.js ships a release that requires sharp >= 0.35.0
+      # (GHSA-f88m-g3jw-g9cj).
       - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=high
+        run: npm audit --omit=dev --omit=optional --audit-level=high
