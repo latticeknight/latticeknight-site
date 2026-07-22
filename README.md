@@ -72,7 +72,8 @@ npm run typecheck
 npm run build
 ```
 
-GitHub Actions runs the same checks for every push and pull request, followed by a production dependency audit.
+GitHub Actions runs the same checks for every pull request and every push to `main`, followed by a production dependency audit.
+`.no-mistakes.yaml` pins those same commands so isolated validation runs stay deterministic.
 
 ## Deployment
 
