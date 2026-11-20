@@ -1,6 +1,5 @@
 # Trusted commands run by the local validation gate from the default branch.
-# The audit flags mirror CI; `.github/workflows/ci.yml` documents why `--omit=optional` is set
-# and when it can be dropped.
+# The audit command mirrors CI and includes optional and development dependencies.
 commands:
-  test: "npm ci && npm run typecheck && npm run build && npm audit --omit=dev --omit=optional --audit-level=high"
+  test: "npm ci && npm run typecheck && npm run build && npm audit --audit-level=high"
   lint: "npm ci && npm run lint"
