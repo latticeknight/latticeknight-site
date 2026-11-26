@@ -74,6 +74,8 @@ npm run build
 
 GitHub Actions runs the same checks for every pull request, every push to `main`, and weekly so newly disclosed advisories can surface without a code change.
 The dependency audit includes optional and development packages and fails CI on high or critical findings.
+A separate daily, read-only production health workflow checks the public domain with bounded retries and timeouts, covering the bilingual home and About pages, security headers, `sitemap.xml`, and `robots.txt`.
+Dependabot opens weekly update proposals for npm dependencies and GitHub Actions.
 `.no-mistakes.yaml` pins those same commands so isolated validation runs stay deterministic.
 
 ## Deployment
