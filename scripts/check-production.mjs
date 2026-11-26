@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 
 import { hrefFor, locales, pageSlugs } from "../src/lib/site.ts";
@@ -22,7 +23,6 @@ const localeChecks = {
 };
 
 const requiredSecurityHeaders = [
-  ["content-security-policy"],
   ["strict-transport-security"],
   ["cross-origin-opener-policy", "same-origin"],
   ["permissions-policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()"],
@@ -30,6 +30,42 @@ const requiredSecurityHeaders = [
   ["x-content-type-options", "nosniff"],
   ["x-frame-options", "deny"],
 ];
+const requiredCspDirectives = [
+  ["default-src", "'self'"],
+  ["object-src", "'none'"],
+  ["frame-ancestors", "'none'"],
+];
+const sitemapParser = `
+import json
+import sys
+import xml.etree.ElementTree as ET
+
+def local_name(tag):
+    return tag.rsplit("}", 1)[-1]
+
+try:
+    root = ET.fromstring(sys.stdin.buffer.read())
+except ET.ParseError as error:
+    print(f"Invalid sitemap XML: {error}", file=sys.stderr)
+    raise SystemExit(1)
+
+if local_name(root.tag) != "urlset":
+    print("Sitemap root must be urlset", file=sys.stderr)
+    raise SystemExit(1)
+
+locations = []
+for url_element in root:
+    if local_name(url_element.tag) != "url":
+        print("Sitemap urlset contains a non-url element", file=sys.stderr)
+        raise SystemExit(1)
+    loc_elements = [child for child in url_element if local_name(child.tag) == "loc"]
+    if len(loc_elements) != 1 or not (loc_elements[0].text or "").strip():
+        print("Sitemap url entry must contain one non-empty loc element", file=sys.stderr)
+        raise SystemExit(1)
+    locations.append(loc_elements[0].text.strip())
+
+print(json.dumps(locations))
+`;
 
 function normaliseHeading(html) {
   return html
@@ -49,6 +85,22 @@ function renderedH1(body, path) {
   return normaliseHeading(match[1]);
 }
 
+function checkContentSecurityPolicy(value) {
+  const directives = new Map();
+  for (const directive of value.split(";")) {
+    const tokens = directive.trim().split(/\s+/);
+    if (!tokens[0]) continue;
+    const name = tokens[0].toLowerCase();
+    const sources = tokens.slice(1).map((token) => token.toLowerCase());
+    directives.set(name, [...(directives.get(name) ?? []), sources]);
+  }
+
+  for (const [name, source] of requiredCspDirectives) {
+    const matches = directives.get(name) ?? [];
+    assert.ok(matches.some((sources) => sources.includes(source)), `Missing CSP ${name} ${source}`);
+  }
+}
+
 function checkSecurityHeaders(headers) {
   for (const [name, expected] of requiredSecurityHeaders) {
     const value = headers.get(name);
@@ -57,6 +109,9 @@ function checkSecurityHeaders(headers) {
       assert.equal(value.trim().toLowerCase(), expected, `Unexpected ${name}`);
     }
   }
+  const contentSecurityPolicy = headers.get("content-security-policy");
+  assert.ok(contentSecurityPolicy, "Missing content-security-policy");
+  checkContentSecurityPolicy(contentSecurityPolicy);
 }
 
 async function checkPage(path, locale, slug) {
@@ -84,21 +139,106 @@ async function fetchText(path, contentType) {
   return response.text();
 }
 
+function parseRobotsGroups(body) {
+  const groups = [];
+  let current;
+
+  for (const rawLine of body.split(/\r?\n/)) {
+    const withoutComment = rawLine.split("#", 1)[0].trim();
+    if (!withoutComment) continue;
+
+    const separator = withoutComment.indexOf(":");
+    if (separator < 1) continue;
+
+    const name = withoutComment.slice(0, separator).trim().toLowerCase();
+    const value = withoutComment.slice(separator + 1).trim().toLowerCase();
+    if (name === "user-agent") {
+      if (!current || current.directives.length > 0) {
+        current = { userAgents: [], directives: [] };
+        groups.push(current);
+      }
+      current.userAgents.push(value);
+    } else if (current) {
+      current.directives.push([name, value]);
+    }
+  }
+
+  return groups;
+}
+
 async function checkRobots() {
   const body = await fetchText("/robots.txt", /^text\/plain\b/);
-  const lines = body.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  assert.ok(lines.some((line) => /^user-agent:\s*\*$/i.test(line)), "Missing allow-all user-agent rule");
-  assert.ok(lines.some((line) => /^allow:\s*\/$/i.test(line)), "Missing allow-all crawler rule");
-  assert.ok(!lines.some((line) => /^disallow:\s*\/(?:\s+#.*)?$/i.test(line)), "Found blanket disallow rule");
-  assert.ok(lines.includes(`Sitemap: ${origin}/sitemap.xml`), "Missing sitemap URL");
+  const wildcardGroup = parseRobotsGroups(body).find((group) => group.userAgents.includes("*"));
+  assert.ok(wildcardGroup, "Missing allow-all user-agent rule");
+  assert.ok(
+    wildcardGroup.directives.some(([name, value]) => name === "allow" && value === "/"),
+    "Missing allow-all crawler rule",
+  );
+  assert.ok(
+    !wildcardGroup.directives.some(([name, value]) => name === "disallow" && value === "/"),
+    "Found blanket disallow rule",
+  );
+  assert.ok(body.includes(`Sitemap: ${origin}/sitemap.xml`), "Missing sitemap URL");
+}
+
+async function parseSitemap(body) {
+  return new Promise((resolve, reject) => {
+    const parser = spawn("python3", ["-c", sitemapParser], {
+      signal: AbortSignal.timeout(5_000),
+    });
+    let output = "";
+    let errorOutput = "";
+    let settled = false;
+
+    parser.stdout.setEncoding("utf8");
+    parser.stderr.setEncoding("utf8");
+    parser.stdout.on("data", (chunk) => {
+      output += chunk;
+    });
+    parser.stderr.on("data", (chunk) => {
+      errorOutput += chunk;
+    });
+    parser.on("error", (error) => {
+      if (!settled) {
+        settled = true;
+        reject(error);
+      }
+    });
+    parser.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      if (code !== 0) {
+        reject(new Error(errorOutput.trim() || `Sitemap parser exited with code ${code}`));
+        return;
+      }
+      try {
+        resolve(JSON.parse(output));
+      } catch (error) {
+        reject(new Error(`Sitemap parser returned invalid JSON: ${error.message}`));
+      }
+    });
+    parser.stdin.end(body);
+  });
 }
 
 async function checkSitemap() {
   const body = await fetchText("/sitemap.xml", /^(?:application|text)\/xml\b/);
-  const actual = [...body.matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/gi)].map(([, url]) => url);
+  const actual = await parseSitemap(body);
   const expected = locales.flatMap((locale) => pageSlugs.map((slug) => `${origin}${hrefFor(locale, slug)}`));
-  assert.equal(actual.length, expected.length, "Unexpected sitemap route count");
-  assert.deepEqual([...new Set(actual)].sort(), [...new Set(expected)].sort(), "Sitemap route set mismatch");
+  const actualSet = new Set(actual);
+  assert.equal(actualSet.size, actual.length, "Sitemap contains duplicate URLs");
+  for (const url of actual) {
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch {
+      assert.fail(`Invalid sitemap URL: ${url}`);
+    }
+    assert.equal(parsed.origin, origin, `Sitemap URL is off-domain: ${url}`);
+  }
+  for (const url of expected) {
+    assert.ok(actualSet.has(url), `Missing sitemap URL: ${url}`);
+  }
 }
 
 const checks = [
